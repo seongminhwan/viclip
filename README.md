@@ -1,6 +1,6 @@
 # VTool - Mac Clipboard Manager
 
-[![Build](https://github.com/YOUR_USERNAME/vtool/actions/workflows/build.yml/badge.svg)](https://github.com/YOUR_USERNAME/vtool/actions/workflows/build.yml)
+[![Build](https://github.com/seongminhwan/viclip/actions/workflows/build.yml/badge.svg)](https://github.com/seongminhwan/viclip/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A powerful native macOS clipboard manager with VIM-style navigation, iCloud sync, and sequential pasting.
