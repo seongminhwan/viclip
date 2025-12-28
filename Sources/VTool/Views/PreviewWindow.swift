@@ -131,11 +131,20 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
             scrollView.translatesAutoresizingMaskIntoConstraints = false
             
             let textView = NSTextView()
-            textView.string = text
-            textView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
             textView.isEditable = false
             textView.isSelectable = true
             textView.textContainerInset = NSSize(width: 10, height: 10)
+            
+            // Apply syntax highlighting if content looks like code
+            let syntaxHighlighter = SyntaxHighlighter.shared
+            if syntaxHighlighter.isLikelyCode(text),
+               let highlighted = syntaxHighlighter.highlight(text) {
+                textView.textStorage?.setAttributedString(highlighted)
+                textView.backgroundColor = NSColor(red: 0.15, green: 0.16, blue: 0.18, alpha: 1.0) // Dark background for code
+            } else {
+                textView.string = text
+                textView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+            }
             
             scrollView.documentView = textView
             containerView.addSubview(scrollView)
