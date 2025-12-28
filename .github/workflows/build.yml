@@ -1,0 +1,71 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
+    
+    - name: Build
+      run: swift build -c release
+    
+    - name: Create App Bundle
+      run: |
+        chmod +x scripts/package.sh
+        ./scripts/package.sh
+    
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: VTool.app
+        path: dist/VTool.app
+        if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: macos-14
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
+    
+    - name: Build Release
+      run: swift build -c release
+    
+    - name: Create App Bundle
+      run: |
+        chmod +x scripts/package.sh
+        ./scripts/package.sh
+    
+    - name: Create DMG
+      run: |
+        mkdir -p dist/dmg
+        cp -r dist/VTool.app dist/dmg/
+        hdiutil create -volname "VTool" -srcfolder dist/dmg -ov -format UDZO dist/VTool.dmg
+    
+    - name: Upload DMG
+      uses: actions/upload-artifact@v4
+      with:
+        name: VTool.dmg
+        path: dist/VTool.dmg
+        if-no-files-found: error
