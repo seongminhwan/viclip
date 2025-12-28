@@ -1,6 +1,12 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Associated Object Keys
+private var kImageDataKey: UInt8 = 0
+private var kResultViewKey: UInt8 = 0
+private var kTextViewKey: UInt8 = 0
+private var kCopyButtonKey: UInt8 = 0
+
 // MARK: - Preview Window Controller
 class PreviewWindowController: NSObject, NSWindowDelegate {
     static let shared = PreviewWindowController()
@@ -91,10 +97,11 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
     // MARK: - OCR Actions
     
     @objc private func performOCR(_ sender: NSButton) {
-        guard let data = objc_getAssociatedObject(sender, "imageData") as? Data,
-              let resultView = objc_getAssociatedObject(sender, "resultView") as? NSScrollView,
-              let textView = objc_getAssociatedObject(sender, "textView") as? NSTextView,
-              let copyButton = objc_getAssociatedObject(sender, "copyButton") as? NSButton else {
+        guard let data = objc_getAssociatedObject(sender, &kImageDataKey) as? Data,
+              let resultView = objc_getAssociatedObject(sender, &kResultViewKey) as? NSScrollView,
+              let textView = objc_getAssociatedObject(sender, &kTextViewKey) as? NSTextView,
+              let copyButton = objc_getAssociatedObject(sender, &kCopyButtonKey) as? NSButton else {
+            print("[OCR] Failed to get associated objects")
             return
         }
         
@@ -132,7 +139,7 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
     }
     
     @objc private func copyOCRResult(_ sender: NSButton) {
-        guard let textView = objc_getAssociatedObject(sender, "textView") as? NSTextView else {
+        guard let textView = objc_getAssociatedObject(sender, &kTextViewKey) as? NSTextView else {
             return
         }
         
@@ -219,15 +226,15 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
                 // OCR button action
                 ocrButton.target = self
                 ocrButton.action = #selector(performOCR(_:))
-                objc_setAssociatedObject(ocrButton, "imageData", data, .OBJC_ASSOCIATION_RETAIN)
-                objc_setAssociatedObject(ocrButton, "resultView", ocrResultView, .OBJC_ASSOCIATION_RETAIN)
-                objc_setAssociatedObject(ocrButton, "textView", ocrTextView, .OBJC_ASSOCIATION_RETAIN)
-                objc_setAssociatedObject(ocrButton, "copyButton", copyButton, .OBJC_ASSOCIATION_RETAIN)
+                objc_setAssociatedObject(ocrButton, &kImageDataKey, data, .OBJC_ASSOCIATION_RETAIN)
+                objc_setAssociatedObject(ocrButton, &kResultViewKey, ocrResultView, .OBJC_ASSOCIATION_RETAIN)
+                objc_setAssociatedObject(ocrButton, &kTextViewKey, ocrTextView, .OBJC_ASSOCIATION_RETAIN)
+                objc_setAssociatedObject(ocrButton, &kCopyButtonKey, copyButton, .OBJC_ASSOCIATION_RETAIN)
                 
                 // Copy button action
                 copyButton.target = self
                 copyButton.action = #selector(copyOCRResult(_:))
-                objc_setAssociatedObject(copyButton, "textView", ocrTextView, .OBJC_ASSOCIATION_RETAIN)
+                objc_setAssociatedObject(copyButton, &kTextViewKey, ocrTextView, .OBJC_ASSOCIATION_RETAIN)
                 
                 NSLayoutConstraint.activate([
                     mainStack.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 10),
