@@ -236,6 +236,91 @@ class ClipboardStore {
         return migratedCount
     }
     
+    // MARK: - Retention Cleanup
+    
+    /// Delete items older than the specified number of days
+    /// Returns the number of deleted items
+    @discardableResult
+    func deleteExpiredItems(olderThanDays days: Int) -> Int {
+        guard days > 0 else { return 0 }
+        
+        let cutoffDate = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
+        
+        do {
+            // Get items to delete (excluding favorites)
+            let expiredItems = try databaseManager.fetchItemsOlderThan(date: cutoffDate)
+            var deletedCount = 0
+            
+            for item in expiredItems {
+                // Skip favorites
+                if item.isFavorite { continue }
+                
+                try databaseManager.deleteItem(id: item.id)
+                largeFileStorage.delete(for: item.id)
+                deletedCount += 1
+            }
+            
+            if deletedCount > 0 {
+                print("[Retention] Deleted \(deletedCount) items older than \(days) days")
+            }
+            return deletedCount
+        } catch {
+            print("[Retention] Error deleting expired items: \(error)")
+            return 0
+        }
+    }
+    
+    /// Enforce maximum item count by deleting oldest non-favorite items
+    /// Returns the number of deleted items
+    @discardableResult
+    func enforceItemLimit(maxItems: Int) -> Int {
+        guard maxItems > 0 else { return 0 }
+        
+        do {
+            let currentCount = try databaseManager.itemCount()
+            guard currentCount > maxItems else { return 0 }
+            
+            let excessCount = currentCount - maxItems
+            let oldestItems = try databaseManager.fetchOldestItems(limit: excessCount + 100) // Get extra to skip favorites
+            
+            var deletedCount = 0
+            for item in oldestItems {
+                if deletedCount >= excessCount { break }
+                
+                // Skip favorites
+                if item.isFavorite { continue }
+                
+                try databaseManager.deleteItem(id: item.id)
+                largeFileStorage.delete(for: item.id)
+                deletedCount += 1
+            }
+            
+            if deletedCount > 0 {
+                print("[Retention] Deleted \(deletedCount) items to enforce limit of \(maxItems)")
+            }
+            return deletedCount
+        } catch {
+            print("[Retention] Error enforcing item limit: \(error)")
+            return 0
+        }
+    }
+    
+    /// Run all enabled retention policies
+    func runRetentionCleanup() {
+        let maxItemsEnabled = UserDefaults.standard.bool(forKey: "retentionMaxItemsEnabled")
+        let maxItems = UserDefaults.standard.integer(forKey: "retentionMaxItems")
+        let maxAgeEnabled = UserDefaults.standard.bool(forKey: "retentionMaxAgeEnabled")
+        let maxAgeDays = UserDefaults.standard.integer(forKey: "retentionMaxAgeDays")
+        
+        if maxAgeEnabled && maxAgeDays > 0 {
+            deleteExpiredItems(olderThanDays: maxAgeDays)
+        }
+        
+        if maxItemsEnabled && maxItems > 0 {
+            enforceItemLimit(maxItems: maxItems)
+        }
+    }
+    
     func clearAll() {
         try? databaseManager.clearAll()
         largeFileStorage.deleteAllExternalFiles()

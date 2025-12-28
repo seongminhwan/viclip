@@ -54,6 +54,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Initialize clipboard monitor
         clipboardMonitor = ClipboardMonitor.shared
         
+        // Run retention cleanup on startup (async to not block launch)
+        DispatchQueue.global(qos: .background).async {
+            ClipboardStore().runRetentionCleanup()
+        }
+        
         // Create the status bar item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         

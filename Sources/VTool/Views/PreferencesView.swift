@@ -74,6 +74,12 @@ struct GeneralSettingsView: View {
     @AppStorage("showInDock") private var showInDock = false
     @AppStorage("popupPosition") private var popupPosition = PopupPosition.menuBar.rawValue
     
+    // Retention settings (defaults off)
+    @AppStorage("retentionMaxItemsEnabled") private var retentionMaxItemsEnabled = false
+    @AppStorage("retentionMaxItems") private var retentionMaxItems = 1000
+    @AppStorage("retentionMaxAgeEnabled") private var retentionMaxAgeEnabled = false
+    @AppStorage("retentionMaxAgeDays") private var retentionMaxAgeDays = 30
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -135,7 +141,7 @@ struct GeneralSettingsView: View {
                 SettingsCard(title: "History", icon: "clock") {
                     VStack(spacing: 12) {
                         HStack {
-                            Text("Maximum items")
+                            Text("In-memory items")
                                 .font(.system(size: 13))
                             Spacer()
                             Picker("", selection: $historyLimit) {
@@ -165,6 +171,86 @@ struct GeneralSettingsView: View {
                             .cornerRadius(6)
                         }
                         .buttonStyle(.plain)
+                    }
+                }
+                
+                // Retention Settings Card (NEW)
+                SettingsCard(title: "Auto-Cleanup (Retention)", icon: "clock.arrow.circlepath") {
+                    VStack(spacing: 16) {
+                        // Info text
+                        HStack {
+                            Image(systemName: "info.circle")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                            Text("Automatically delete old items to save storage. Disabled by default.")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                        
+                        Divider()
+                        
+                        // Max Items Limit
+                        VStack(spacing: 8) {
+                            HStack {
+                                Toggle("", isOn: $retentionMaxItemsEnabled)
+                                    .toggleStyle(.switch)
+                                    .labelsHidden()
+                                Text("Limit total saved items")
+                                    .font(.system(size: 13))
+                                Spacer()
+                            }
+                            
+                            if retentionMaxItemsEnabled {
+                                HStack {
+                                    Text("Keep at most:")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    Picker("", selection: $retentionMaxItems) {
+                                        Text("500").tag(500)
+                                        Text("1,000").tag(1000)
+                                        Text("5,000").tag(5000)
+                                        Text("10,000").tag(10000)
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .frame(width: 220)
+                                }
+                                .padding(.leading, 40)
+                            }
+                        }
+                        
+                        Divider()
+                        
+                        // Max Age Limit
+                        VStack(spacing: 8) {
+                            HStack {
+                                Toggle("", isOn: $retentionMaxAgeEnabled)
+                                    .toggleStyle(.switch)
+                                    .labelsHidden()
+                                Text("Delete items older than")
+                                    .font(.system(size: 13))
+                                Spacer()
+                            }
+                            
+                            if retentionMaxAgeEnabled {
+                                HStack {
+                                    Text("Max age:")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    Picker("", selection: $retentionMaxAgeDays) {
+                                        Text("7 days").tag(7)
+                                        Text("30 days").tag(30)
+                                        Text("90 days").tag(90)
+                                        Text("1 year").tag(365)
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .frame(width: 220)
+                                }
+                                .padding(.leading, 40)
+                            }
+                        }
                     }
                 }
             }

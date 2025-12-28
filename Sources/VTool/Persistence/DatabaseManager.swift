@@ -403,6 +403,29 @@ class DatabaseManager {
         } ?? []
     }
     
+    // MARK: - Retention Queries
+    
+    /// Fetch items older than the specified date
+    func fetchItemsOlderThan(date: Date) throws -> [DBClipboardItem] {
+        let timestamp = date.timeIntervalSince1970
+        return try dbQueue?.read { db in
+            try DBClipboardItem
+                .filter(Column("created_at") < timestamp)
+                .order(Column("created_at").asc)
+                .fetchAll(db)
+        } ?? []
+    }
+    
+    /// Fetch the oldest items (for enforcing item limit)
+    func fetchOldestItems(limit: Int) throws -> [DBClipboardItem] {
+        try dbQueue?.read { db in
+            try DBClipboardItem
+                .order(Column("created_at").asc)
+                .limit(limit)
+                .fetchAll(db)
+        } ?? []
+    }
+    
     // MARK: - Migration
     
     func migrateFromJSON(items: [ClipboardItem]) throws {
