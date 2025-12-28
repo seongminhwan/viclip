@@ -115,6 +115,8 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
                 
                 await MainActor.run {
                     textView.string = text
+                    textView.textColor = NSColor.labelColor
+                    textView.font = NSFont.systemFont(ofSize: 12)
                     resultView.isHidden = false
                     copyButton.isHidden = false
                     sender.title = "✅ Text Extracted"
@@ -126,6 +128,10 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
                         frame.origin.y -= 150
                         window.setFrame(frame, display: true, animate: true)
                     }
+                    
+                    // Force layout update
+                    resultView.needsLayout = true
+                    resultView.layoutSubtreeIfNeeded()
                 }
             } catch {
                 await MainActor.run {
@@ -207,12 +213,20 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
                 ocrResultView.hasVerticalScroller = true
                 ocrResultView.isHidden = true
                 ocrResultView.heightAnchor.constraint(equalToConstant: 120).isActive = true
+                ocrResultView.borderType = .bezelBorder
+                ocrResultView.backgroundColor = .textBackgroundColor
                 
                 let ocrTextView = NSTextView()
                 ocrTextView.isEditable = false
                 ocrTextView.isSelectable = true
                 ocrTextView.font = NSFont.systemFont(ofSize: 12)
                 ocrTextView.textContainerInset = NSSize(width: 8, height: 8)
+                ocrTextView.backgroundColor = .textBackgroundColor
+                ocrTextView.textColor = .textColor
+                ocrTextView.autoresizingMask = [.width]
+                ocrTextView.isVerticallyResizable = true
+                ocrTextView.isHorizontallyResizable = false
+                ocrTextView.textContainer?.widthTracksTextView = true
                 ocrResultView.documentView = ocrTextView
                 mainStack.addArrangedSubview(ocrResultView)
                 
@@ -254,8 +268,11 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
             textView.isSelectable = true
             textView.textContainerInset = NSSize(width: 10, height: 10)
             
+            textView.textContainerInset = NSSize(width: 10, height: 10)
+            
             // Apply syntax highlighting if content looks like code
             let syntaxHighlighter = SyntaxHighlighter.shared
+            
             if syntaxHighlighter.isLikelyCode(text),
                let highlighted = syntaxHighlighter.highlight(text) {
                 textView.textStorage?.setAttributedString(highlighted)
@@ -313,12 +330,24 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
             scrollView.translatesAutoresizingMaskIntoConstraints = false
             
             let textView = NSTextView()
-            if let attrString = NSAttributedString(rtf: data, documentAttributes: nil) {
-                textView.textStorage?.setAttributedString(attrString)
-            }
             textView.isEditable = false
             textView.isSelectable = true
             textView.textContainerInset = NSSize(width: 10, height: 10)
+            
+            if let attrString = NSAttributedString(rtf: data, documentAttributes: nil) {
+                let plainText = attrString.string
+                
+                // Check if this is actually code that should be syntax highlighted
+                let syntaxHighlighter = SyntaxHighlighter.shared
+                if syntaxHighlighter.isLikelyCode(plainText),
+                   let highlighted = syntaxHighlighter.highlight(plainText) {
+                    textView.textStorage?.setAttributedString(highlighted)
+                    textView.backgroundColor = NSColor(red: 0.15, green: 0.16, blue: 0.18, alpha: 1.0)
+                } else {
+                    // Show original rich text formatting
+                    textView.textStorage?.setAttributedString(attrString)
+                }
+            }
             
             scrollView.documentView = textView
             containerView.addSubview(scrollView)

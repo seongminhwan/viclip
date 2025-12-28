@@ -1664,10 +1664,22 @@ struct PopupWindowView: View {
                     .padding(.bottom, 4)
                 }
                 
-                Text(text)
-                    .font(.system(size: 13, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                // Syntax highlighting for text
+                if SyntaxHighlighter.shared.isLikelyCode(text),
+                   let highlighted = SyntaxHighlighter.shared.highlight(text) {
+                    Text(AttributedString(highlighted))
+                        .font(.custom("Menlo", size: 12)) // Ensure monospaced font
+                        .textSelection(.enabled)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(red: 0.15, green: 0.16, blue: 0.18))
+                        .cornerRadius(4)
+                } else {
+                    Text(text)
+                        .font(.system(size: 13, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             
         case .fileURL(let path):
@@ -1716,9 +1728,21 @@ struct PopupWindowView: View {
             
         case .richText(let data):
             if let attrString = NSAttributedString(rtf: data, documentAttributes: nil) {
-                Text(AttributedString(attrString))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                // Helper to render content
+                Group {
+                    if SyntaxHighlighter.shared.isLikelyCode(attrString.string),
+                       let highlighted = SyntaxHighlighter.shared.highlight(attrString.string) {
+                        Text(AttributedString(highlighted))
+                            .font(.custom("Menlo", size: 12))
+                            .padding(8)
+                            .background(Color(red: 0.15, green: 0.16, blue: 0.18))
+                            .cornerRadius(4)
+                    } else {
+                        Text(AttributedString(attrString))
+                    }
+                }
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 Text("Unable to load rich text")
                     .foregroundColor(theme.secondaryText)
