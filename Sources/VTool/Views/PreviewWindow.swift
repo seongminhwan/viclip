@@ -88,6 +88,66 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
         }
     }
     
+    // MARK: - OCR Actions
+    
+    @objc private func performOCR(_ sender: NSButton) {
+        guard let data = objc_getAssociatedObject(sender, "imageData") as? Data,
+              let resultView = objc_getAssociatedObject(sender, "resultView") as? NSScrollView,
+              let textView = objc_getAssociatedObject(sender, "textView") as? NSTextView,
+              let copyButton = objc_getAssociatedObject(sender, "copyButton") as? NSButton else {
+            return
+        }
+        
+        // Show loading state
+        sender.title = "⏳ Processing..."
+        sender.isEnabled = false
+        
+        Task {
+            do {
+                let text = try await OCRService.shared.recognizeText(from: data)
+                
+                await MainActor.run {
+                    textView.string = text
+                    resultView.isHidden = false
+                    copyButton.isHidden = false
+                    sender.title = "✅ Text Extracted"
+                    
+                    // Resize window to accommodate OCR result
+                    if let window = self.panel {
+                        var frame = window.frame
+                        frame.size.height += 150
+                        frame.origin.y -= 150
+                        window.setFrame(frame, display: true, animate: true)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    textView.string = "Error: \(error.localizedDescription)"
+                    resultView.isHidden = false
+                    sender.title = "❌ OCR Failed"
+                    sender.isEnabled = true
+                }
+            }
+        }
+    }
+    
+    @objc private func copyOCRResult(_ sender: NSButton) {
+        guard let textView = objc_getAssociatedObject(sender, "textView") as? NSTextView else {
+            return
+        }
+        
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(textView.string, forType: .string)
+        
+        // Visual feedback
+        let originalTitle = sender.title
+        sender.title = "✅ Copied!"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            sender.title = originalTitle
+        }
+    }
+    
     private func createContentView(for item: ClipboardItem) -> NSView {
         let containerView = NSView()
         containerView.wantsLayer = true
@@ -95,33 +155,85 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
         switch item.content {
         case .image(let data):
             if let nsImage = NSImage(data: data) {
+                // Main vertical stack
+                let mainStack = NSStackView()
+                mainStack.orientation = .vertical
+                mainStack.spacing = 8
+                mainStack.translatesAutoresizingMaskIntoConstraints = false
+                containerView.addSubview(mainStack)
+                
+                // Image view
                 let imageView = NSImageView()
                 imageView.image = nsImage
                 imageView.imageScaling = .scaleProportionallyUpOrDown
-                imageView.translatesAutoresizingMaskIntoConstraints = false
-                // Prevent image from expanding beyond container
                 imageView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
                 imageView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-                containerView.addSubview(imageView)
+                mainStack.addArrangedSubview(imageView)
+                
+                // Info and OCR button row
+                let bottomRow = NSStackView()
+                bottomRow.orientation = .horizontal
+                bottomRow.spacing = 12
+                bottomRow.alignment = .centerY
                 
                 // Info label
                 let infoLabel = NSTextField(labelWithString: "\(Int(nsImage.size.width))×\(Int(nsImage.size.height)) | \(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))")
                 infoLabel.font = NSFont.systemFont(ofSize: 11)
                 infoLabel.textColor = .secondaryLabelColor
-                infoLabel.alignment = .center
-                infoLabel.translatesAutoresizingMaskIntoConstraints = false
-                containerView.addSubview(infoLabel)
+                bottomRow.addArrangedSubview(infoLabel)
+                
+                // Spacer
+                let spacer = NSView()
+                spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+                bottomRow.addArrangedSubview(spacer)
+                
+                // OCR Button
+                let ocrButton = NSButton(title: "📝 Extract Text (OCR)", target: nil, action: nil)
+                ocrButton.bezelStyle = .rounded
+                ocrButton.font = NSFont.systemFont(ofSize: 11)
+                bottomRow.addArrangedSubview(ocrButton)
+                
+                mainStack.addArrangedSubview(bottomRow)
+                
+                // OCR Result area (hidden initially)
+                let ocrResultView = NSScrollView()
+                ocrResultView.hasVerticalScroller = true
+                ocrResultView.isHidden = true
+                ocrResultView.heightAnchor.constraint(equalToConstant: 120).isActive = true
+                
+                let ocrTextView = NSTextView()
+                ocrTextView.isEditable = false
+                ocrTextView.isSelectable = true
+                ocrTextView.font = NSFont.systemFont(ofSize: 12)
+                ocrTextView.textContainerInset = NSSize(width: 8, height: 8)
+                ocrResultView.documentView = ocrTextView
+                mainStack.addArrangedSubview(ocrResultView)
+                
+                // Copy OCR result button (hidden initially)
+                let copyButton = NSButton(title: "📋 Copy Text", target: nil, action: nil)
+                copyButton.bezelStyle = .rounded
+                copyButton.font = NSFont.systemFont(ofSize: 11)
+                copyButton.isHidden = true
+                mainStack.addArrangedSubview(copyButton)
+                
+                // OCR button action
+                ocrButton.target = self
+                ocrButton.action = #selector(performOCR(_:))
+                objc_setAssociatedObject(ocrButton, "imageData", data, .OBJC_ASSOCIATION_RETAIN)
+                objc_setAssociatedObject(ocrButton, "resultView", ocrResultView, .OBJC_ASSOCIATION_RETAIN)
+                objc_setAssociatedObject(ocrButton, "textView", ocrTextView, .OBJC_ASSOCIATION_RETAIN)
+                objc_setAssociatedObject(ocrButton, "copyButton", copyButton, .OBJC_ASSOCIATION_RETAIN)
+                
+                // Copy button action
+                copyButton.target = self
+                copyButton.action = #selector(copyOCRResult(_:))
+                objc_setAssociatedObject(copyButton, "textView", ocrTextView, .OBJC_ASSOCIATION_RETAIN)
                 
                 NSLayoutConstraint.activate([
-                    imageView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 10),
-                    imageView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 10),
-                    imageView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -10),
-                    imageView.bottomAnchor.constraint(equalTo: infoLabel.topAnchor, constant: -8),
-                    
-                    infoLabel.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 10),
-                    infoLabel.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -10),
-                    infoLabel.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -10),
-                    infoLabel.heightAnchor.constraint(equalToConstant: 16)
+                    mainStack.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 10),
+                    mainStack.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 10),
+                    mainStack.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -10),
+                    mainStack.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -10)
                 ])
             }
             
