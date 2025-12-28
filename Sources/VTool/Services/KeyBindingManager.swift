@@ -22,6 +22,9 @@ class KeyBindingManager: ObservableObject {
         case position = "Locate in Timeline"
         case addToQueue = "Add to Paste Queue"
         case escape = "Exit / Cancel"
+        case pageUp = "Page Up"
+        case pageDown = "Page Down"
+        case secondaryAction = "Open / OCR"
         
         var id: String { rawValue }
         
@@ -42,6 +45,9 @@ class KeyBindingManager: ObservableObject {
             case .position: return KeyBinding(key: "p", keyCode: 35, requiresShift: false)
             case .addToQueue: return KeyBinding(key: "q", keyCode: 12, requiresShift: false)
             case .escape: return KeyBinding(key: "⎋", keyCode: 53, requiresShift: false)
+            case .pageUp: return KeyBinding(key: "⌃u", keyCode: 32, requiresShift: false, requiresControl: true)
+            case .pageDown: return KeyBinding(key: "⌃d", keyCode: 2, requiresShift: false, requiresControl: true)
+            case .secondaryAction: return KeyBinding(key: "o", keyCode: 31, requiresShift: false)
             }
         }
     }
@@ -200,6 +206,24 @@ class KeyBindingManager: ObservableObject {
             return nil
         }
         return num
+    }
+    
+    // Helper to resolve command from event without executing it
+    func resolveCommand(for event: NSEvent) -> Command? {
+        // Check custom bindings first
+        for (command, binding) in bindings {
+            if binding.matches(event: event) {
+                return command
+            }
+        }
+        
+        // Check default bindings for commands that don't have custom bindings
+        for cmd in Command.allCases {
+             if bindings[cmd] == nil && cmd.defaultBinding.matches(event: event) {
+                 return cmd
+             }
+        }
+        return nil
     }
     
     // MARK: - Persistence

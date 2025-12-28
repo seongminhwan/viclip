@@ -52,9 +52,11 @@ struct PopupWindowView: View {
     @State private var isLoadingPreview: Bool = false
     @State private var previewItemId: UUID? = nil
     
-    // Help panel for showing keyboard shortcuts
     @State private var isHelpPanelOpen: Bool = false
     @State private var helpScrollIndex: Int = 0
+    
+    // Scroll state for preview overlay
+    @StateObject private var previewScrollState = PreviewScrollState()
     
     @Environment(\.colorScheme) private var colorScheme
     
@@ -505,7 +507,9 @@ struct PopupWindowView: View {
     }
     
     private var currentContextName: String {
-        if isTagPanelOpen && isTagPanelFocused {
+        if isPreviewMode {
+            return "PREVIEW"
+        } else if isTagPanelOpen && isTagPanelFocused {
             return "TAG PANEL"
         } else if isTagPanelOpen && !isTagPanelFocused {
             return "TAG HISTORY"
@@ -529,7 +533,17 @@ struct PopupWindowView: View {
     private var currentContextShortcuts: [ShortcutInfo] {
         let kb = keyBindingManager
         
-        if isTagPanelOpen && isTagPanelFocused {
+        if isPreviewMode {
+            return [
+                ShortcutInfo(key: kb.binding(for: .moveDown).displayString + " / j", description: "Scroll down"),
+                ShortcutInfo(key: kb.binding(for: .moveUp).displayString + " / k", description: "Scroll up"),
+                ShortcutInfo(key: kb.binding(for: .pageDown).displayString, description: "Page down"),
+                ShortcutInfo(key: kb.binding(for: .pageUp).displayString, description: "Page up"),
+                ShortcutInfo(key: kb.binding(for: .secondaryAction).displayString, description: "Open / OCR Trigger"),
+                ShortcutInfo(key: "⌘C", description: "Copy OCR Result"),
+                ShortcutInfo(key: kb.binding(for: .escape).displayString + " / v", description: "Close preview"),
+            ]
+        } else if isTagPanelOpen && isTagPanelFocused {
             return [
                 ShortcutInfo(key: "j / ↓", description: "Move down"),
                 ShortcutInfo(key: "k / ↑", description: "Move up"),
@@ -874,20 +888,38 @@ struct PopupWindowView: View {
         
         // Preview mode handling
         if isPreviewMode {
-            // ESC or v to close
-            if keyCode == 53 || keyCode == 9 {
-                exitPreviewMode()
-                return true
-            }
-            // o to open in external app
-            if keyCode == 31 {
-                if let item = previewingItem {
-                    openInExternalApp(item)
+            if let command = KeyBindingManager.shared.resolveCommand(for: event) {
+                switch command {
+                case .escape, .quickPreview:
                     exitPreviewMode()
+                    return true
+                case .pageUp:
+                    previewScrollState.scroll(.pageUp)
+                    return true
+                case .pageDown:
+                    previewScrollState.scroll(.pageDown)
+                    return true
+                case .moveUp:
+                    previewScrollState.scroll(.lineUp)
+                    return true
+                case .moveDown:
+                    previewScrollState.scroll(.lineDown)
+                    return true
+                case .secondaryAction:
+                     if let item = previewingItem {
+                         if case .fileURL(let path) = item.content {
+                             QuickLookController.shared.showPreview(for: path)
+                             return true
+                         }
+                         openInExternalApp(item)
+                         exitPreviewMode()
+                         return true
+                     }
+                default: break
                 }
-                return true
             }
-            return true  // Consume all keys in preview mode
+            // Block other keys in preview mode
+            return true
         }
         
         // Type filter mode handling
@@ -1194,6 +1226,10 @@ struct PopupWindowView: View {
             // In NORMAL mode with no special modes - close popup
             AppDelegate.shared?.closePopup()
             return true
+            
+        case .pageUp, .pageDown, .secondaryAction:
+            // These are preview-only commands, not used in main view
+            return false
         }
         
         return false
@@ -1665,21 +1701,21 @@ struct PopupWindowView: View {
                 }
                 
                 // Syntax highlighting for text
-                if SyntaxHighlighter.shared.isLikelyCode(text),
-                   let highlighted = SyntaxHighlighter.shared.highlight(text) {
-                    Text(AttributedString(highlighted))
-                        .font(.custom("Menlo", size: 12)) // Ensure monospaced font
-                        .textSelection(.enabled)
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(red: 0.15, green: 0.16, blue: 0.18))
-                        .cornerRadius(4)
-                } else {
-                    Text(text)
-                        .font(.system(size: 13, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                Group {
+                    if SyntaxHighlighter.shared.isLikelyCode(text),
+                       let highlighted = SyntaxHighlighter.shared.highlight(text) {
+                        PreviewTextView(attributedText: highlighted, scrollState: previewScrollState)
+                            .background(Color(red: 0.15, green: 0.16, blue: 0.18))
+                    } else {
+                        let attrStr = NSAttributedString(string: text, attributes: [
+                            .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular),
+                            .foregroundColor: NSColor.textColor
+                        ])
+                        PreviewTextView(attributedText: attrStr, scrollState: previewScrollState)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .cornerRadius(4)
             }
             
         case .fileURL(let path):
@@ -1732,17 +1768,14 @@ struct PopupWindowView: View {
                 Group {
                     if SyntaxHighlighter.shared.isLikelyCode(attrString.string),
                        let highlighted = SyntaxHighlighter.shared.highlight(attrString.string) {
-                        Text(AttributedString(highlighted))
-                            .font(.custom("Menlo", size: 12))
-                            .padding(8)
+                        PreviewTextView(attributedText: highlighted, scrollState: previewScrollState)
                             .background(Color(red: 0.15, green: 0.16, blue: 0.18))
-                            .cornerRadius(4)
                     } else {
-                        Text(AttributedString(attrString))
+                        PreviewTextView(attributedText: attrString, scrollState: previewScrollState)
                     }
                 }
-                .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .cornerRadius(4)
             } else {
                 Text("Unable to load rich text")
                     .foregroundColor(theme.secondaryText)
@@ -2661,4 +2694,92 @@ struct FlowLayout: Layout {
 
 #Preview {
     PopupWindowView()
+}
+
+// MARK: - Preview Components
+
+class PreviewScrollState: ObservableObject {
+    enum Action {
+        case lineUp, lineDown, pageUp, pageDown
+        case top, bottom
+    }
+    @Published var action: Action?
+    
+    func scroll(_ action: Action) {
+        self.action = action
+    }
+}
+
+struct PreviewTextView: NSViewRepresentable {
+    let attributedText: NSAttributedString
+    @ObservedObject var scrollState: PreviewScrollState
+    
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        
+        let textView = NSTextView()
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.drawsBackground = true
+        textView.backgroundColor = .clear
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainerInset = NSSize(width: 10, height: 10)
+        
+        scrollView.documentView = textView
+        return scrollView
+    }
+    
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = scrollView.documentView as? NSTextView else { return }
+        
+        // Update content if changed
+        if textView.textStorage?.string != attributedText.string {
+            textView.textStorage?.setAttributedString(attributedText)
+        }
+        
+        // Handle scrolling
+        if let action = scrollState.action {
+            let clipView = scrollView.contentView
+            var newOrigin = clipView.bounds.origin
+            let currentHeight = clipView.bounds.height
+            
+            switch action {
+            case .lineUp:
+                newOrigin.y -= 40
+            case .lineDown:
+                newOrigin.y += 40
+            case .pageUp:
+                newOrigin.y -= currentHeight / 2
+            case .pageDown:
+                newOrigin.y += currentHeight / 2
+            case .top:
+                newOrigin.y = 0
+            case .bottom:
+                if let docView = scrollView.documentView {
+                    newOrigin.y = docView.bounds.height
+                }
+            }
+            
+            // Clamp
+            if let docView = scrollView.documentView {
+                let maxY = max(0, docView.bounds.height - currentHeight)
+                newOrigin.y = max(0, min(newOrigin.y, maxY))
+            }
+            
+            NSAnimationContext.beginGrouping()
+            NSAnimationContext.current.duration = 0.1
+            clipView.animator().setBoundsOrigin(newOrigin)
+            NSAnimationContext.endGrouping()
+            
+            scrollView.reflectScrolledClipView(clipView)
+            
+            DispatchQueue.main.async {
+                scrollState.action = nil
+            }
+        }
+    }
 }
