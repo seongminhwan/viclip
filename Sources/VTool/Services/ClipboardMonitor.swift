@@ -166,6 +166,39 @@ class ClipboardMonitor: ObservableObject {
         AppDelegate.shared?.closePopoverAndPaste()
     }
     
+    /// Paste as plain text, stripping any formatting
+    func pasteAsPlainText(item: ClipboardItem) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        
+        // Extract plain text from any content type
+        let plainText: String
+        switch item.content {
+        case .text(let string):
+            plainText = string
+        case .richText(let data):
+            // Convert RTF to plain text
+            if let attributedString = NSAttributedString(rtf: data, documentAttributes: nil) {
+                plainText = attributedString.string
+            } else {
+                plainText = ""
+            }
+        case .image:
+            // Cannot paste image as plain text
+            return
+        case .fileURL(let path):
+            plainText = path
+        }
+        
+        pasteboard.setString(plainText, forType: .string)
+        
+        // Update change count to ignore this clipboard change
+        lastChangeCount = NSPasteboard.general.changeCount
+        
+        // Close popover and paste to previous app
+        AppDelegate.shared?.closePopoverAndPaste()
+    }
+    
     func delete(item: ClipboardItem) {
         items.removeAll { $0.id == item.id }
         store.deleteItem(id: item.id)

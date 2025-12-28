@@ -1095,6 +1095,12 @@ struct PopupWindowView: View {
                 return true
             }
             
+        case .pasteAsPlainText:
+            if let item = selectedItem {
+                clipboardMonitor.pasteAsPlainText(item: item)
+                return true
+            }
+            
         case .delete:
             if let item = selectedItem {
                 clipboardMonitor.delete(item: item)

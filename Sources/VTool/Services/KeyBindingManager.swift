@@ -12,6 +12,7 @@ class KeyBindingManager: ObservableObject {
         case moveToTop = "Move to Top"
         case moveToBottom = "Move to Bottom"
         case paste = "Paste Selected"
+        case pasteAsPlainText = "Paste as Plain Text"
         case delete = "Delete Item"
         case favorite = "Toggle Favorite"
         case filterByType = "Filter by Type"
@@ -31,6 +32,7 @@ class KeyBindingManager: ObservableObject {
             case .moveToTop: return KeyBinding(key: "gg", keyCode: 5, requiresShift: false, isSequence: true)
             case .moveToBottom: return KeyBinding(key: "G", keyCode: 5, requiresShift: true)
             case .paste: return KeyBinding(key: "⏎", keyCode: 36, requiresShift: false)
+            case .pasteAsPlainText: return KeyBinding(key: "⌘⏎", keyCode: 36, requiresShift: false, requiresCommand: true)
             case .delete: return KeyBinding(key: "d", keyCode: 2, requiresShift: false)
             case .favorite: return KeyBinding(key: "⌃F", keyCode: 3, requiresShift: false, requiresControl: true)
             case .filterByType: return KeyBinding(key: "F", keyCode: 3, requiresShift: true)
