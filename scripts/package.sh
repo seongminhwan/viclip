@@ -27,6 +27,16 @@ else
     exit 1
 fi
 
+# Copy resource bundles (Highlightr, KeyboardShortcuts, etc.)
+echo "📁 Copying resource bundles..."
+for bundle in "$BUILD_DIR"/*.bundle; do
+    if [ -d "$bundle" ]; then
+        bundle_name=$(basename "$bundle")
+        echo "   Copying $bundle_name"
+        cp -R "$bundle" "$APP_BUNDLE/Contents/Resources/"
+    fi
+done
+
 # Create Info.plist
 cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -74,4 +84,6 @@ fi
 echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 
 echo "✅ App bundle created at: $APP_BUNDLE"
+echo "   Contents:"
+ls -la "$APP_BUNDLE/Contents/Resources/" | head -20
 echo "   To run: open $APP_BUNDLE"
