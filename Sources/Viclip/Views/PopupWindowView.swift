@@ -27,6 +27,7 @@ struct PopupWindowView: View {
     @State private var previewScrollOffset: CGFloat = 0  // Scroll position
     @State private var showCopiedFeedback: Bool = false  // Copy feedback indicator
     @FocusState private var isSearchFocused: Bool  // SEARCH mode when true, NORMAL when false
+    @State private var searchModeEnterCount: Int = 0  // Track Enter presses in SEARCH mode: first=exit, second=paste
     
     // Tag Manager state
     @ObservedObject private var tagService = TagService.shared
@@ -1346,6 +1347,7 @@ struct PopupWindowView: View {
             }
             
         case .search:
+            searchModeEnterCount = 0  // Reset counter when entering SEARCH mode
             isSearchFocused = true
             return true
             
@@ -2331,7 +2333,12 @@ struct PopupWindowView: View {
                     .focused($isSearchFocused)
                     .disabled(isPositionMode)
                     .onSubmit {
-                        if let item = selectedItem {
+                        // First Enter in SEARCH mode = exit search (like ESC)
+                        // Second Enter = paste
+                        if searchModeEnterCount == 0 {
+                            searchModeEnterCount = 1
+                            isSearchFocused = false  // Exit SEARCH mode
+                        } else if let item = selectedItem {
                             clipboardMonitor.paste(item: item)
                         }
                     }
@@ -2406,6 +2413,7 @@ struct PopupWindowView: View {
                                     isFocused: !isTagPanelFocused,
                                     isAnchor: isPositionMode && item.id == positionAnchorItem?.id,
                                     isPinned: item.isPinnedItem,
+                                    isInSearchMode: isSearchFocused,
                                     fontSize: themeManager.fontSize,
                                     theme: theme
                                 )
@@ -2794,6 +2802,7 @@ struct CompactItemRow: View {
     let isFocused: Bool  // Whether history list has focus (not tag panel)
     let isAnchor: Bool
     var isPinned: Bool = false  // Whether this is a pinned item
+    var isInSearchMode: Bool = false  // Whether SEARCH mode is active (semi-transparent selection)
     let fontSize: Double
     let theme: ThemeColors
     
@@ -2804,6 +2813,10 @@ struct CompactItemRow: View {
             return Color.cyan.opacity(0.25)
         } else if isSelected {
             // Show dimmed selection when not focused (tag panel has focus)
+            // Also show dimmed when in SEARCH mode (first Enter = exit, not paste)
+            if isInSearchMode {
+                return theme.selection.opacity(0.15)  // Extra dim in SEARCH mode
+            }
             return isFocused ? theme.selection : theme.selection.opacity(0.4)
         } else if isHovered {
             return theme.hover
