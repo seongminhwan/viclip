@@ -326,8 +326,22 @@ struct PopupWindowView: View {
         .background(theme.background)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in
+            // Reset state when window is shown
+            selectedIndex = 0
+            searchText = ""
+            debouncedSearchText = ""
+            isCommandMode = false
+            isPositionMode = false
+            isTypeFilterMode = false
+            isPreviewMode = false
+            isHelpPanelOpen = false
+            isTagAssociationPopupOpen = false
+            isAdvancedFilterOpen = false
+            vimEngine.resetState()
             // Start in NORMAL mode (search not focused)
             isSearchFocused = false
+            // Reload items to get fresh data
+            clipboardMonitor.setSearchQuery(nil, tagIds: nil)
         }
         .onAppear {
             selectedIndex = 0

@@ -11,5 +11,6 @@
   "LSMinimumSystemVersion": "12.0",
   "LSUIElement": true,
   "NSHumanReadableCopyright": "Copyright © 2024. All rights reserved.",
-  "NSPrincipalClass": "NSApplication"
+  "NSPrincipalClass": "NSApplication",
+  "NSAppleEventsUsageDescription": "Viclip needs to control System Events to paste clipboard content into other applications."
 }

@@ -766,11 +766,49 @@ struct SyncSettingsView: View {
 
 // MARK: - About View
 struct AboutView: View {
+    // Try to load app icon from various sources
+    private var appIconImage: NSImage? {
+        // 1. Try bundle's AppIcon
+        if let icon = NSImage(named: "AppIcon"), icon.size.width > 0 {
+            return icon
+        }
+        
+        // 2. Try to load from Resources in bundle
+        if let iconPath = Bundle.main.path(forResource: "AppIcon", ofType: "icns"),
+           let icon = NSImage(contentsOfFile: iconPath) {
+            return icon
+        }
+        
+        // 3. For development: try to load from source directory
+        let possiblePaths = [
+            "Sources/Viclip/Resources/AppIcon.icns",
+            "../Sources/Viclip/Resources/AppIcon.icns",
+            "logo.png",
+            "../logo.png"
+        ]
+        for path in possiblePaths {
+            if let icon = NSImage(contentsOfFile: path), icon.size.width > 0 {
+                return icon
+            }
+        }
+        
+        return nil
+    }
+    
     var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: "doc.on.clipboard.fill")
-                .font(.system(size: 64))
-                .foregroundColor(.accentColor)
+            // Use app icon
+            if let icon = appIconImage {
+                Image(nsImage: icon)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 128, height: 128)
+            } else {
+                // Fallback to SF Symbol if icon not found
+                Image(systemName: "doc.on.clipboard.fill")
+                    .font(.system(size: 64))
+                    .foregroundColor(.accentColor)
+            }
             
             Text("Viclip")
                 .font(.largeTitle)

@@ -14,7 +14,12 @@ enum ClipboardContent: Codable, Equatable {
             // Trim leading/trailing whitespace for cleaner list display
             let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
             return String(trimmed.prefix(100))
-        case .richText:
+        case .richText(let data):
+            // Convert RTF to plain text for preview
+            if let attributedString = NSAttributedString(rtf: data, documentAttributes: nil) {
+                let plainText = attributedString.string.trimmingCharacters(in: .whitespacesAndNewlines)
+                return plainText.isEmpty ? "[Rich Text]" : String(plainText.prefix(100))
+            }
             return "[Rich Text]"
         case .image:
             return "[Image]"

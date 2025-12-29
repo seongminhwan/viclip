@@ -1,5 +1,6 @@
 import SwiftUI
 import KeyboardShortcuts
+import os.log
 
 // MARK: - Global Shortcut Definitions
 extension KeyboardShortcuts.Name {
@@ -42,8 +43,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let windowHeight: CGFloat = 500
     private let tagPanelWidth: CGFloat = 200
     
-    // Store the previously active application
+    // Store the previously active application (tracked via NSWorkspace notification)
     private var previousApp: NSRunningApplication?
+    
+    // Observer for app activation events
+    private var appActivationObserver: NSObjectProtocol?
     
     // Tag panel state observer
     private var tagPanelObserver: NSObjectProtocol?
@@ -57,6 +61,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Run retention cleanup on startup (async to not block launch)
         DispatchQueue.global(qos: .background).async {
             ClipboardStore().runRetentionCleanup()
+        }
+        
+        // Check permissions on launch (with slight delay for better UX)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            PermissionManager.shared.checkAndRequestPermissions()
         }
         
         // Create the status bar item
@@ -108,6 +117,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         
+        // Monitor app activation to reliably track the previous non-Viclip app
+        // This is more reliable than checking frontmostApplication in showWindow()
+        let myBundleId = Bundle.main.bundleIdentifier
+        appActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  app.bundleIdentifier != myBundleId else { return }
+            // Only update previousApp if it's a normal app (not Viclip)
+            self?.previousApp = app
+        }
+        
         // Hide dock icon for menu bar app
         NSApp.setActivationPolicy(.accessory)
     }
@@ -118,6 +141,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let observer = tagPanelObserver {
             NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = appActivationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
         }
     }
     
@@ -173,8 +199,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func showWindow() {
-        // Remember the currently active application before showing window
-        previousApp = NSWorkspace.shared.frontmostApplication
+        // previousApp is now tracked via NSWorkspace.didActivateApplicationNotification
+        // No need to manually track it here
         
         // Create window if needed
         if mainWindow == nil {
@@ -331,31 +357,51 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hideWindow()
         
         // Activate the previous application and paste
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            // Activate the previous app
-            if let previousApp = self?.previousApp {
-                previousApp.activate(options: [.activateIgnoringOtherApps])
+        // Keep delay minimal for responsive UX
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self = self else { return }
+            
+            // Try to activate the previous app
+            var appToActivate = self.previousApp
+            
+            // If no previousApp, try to find the last non-Viclip app
+            if appToActivate == nil {
+                let myBundleId = Bundle.main.bundleIdentifier
+                appToActivate = NSWorkspace.shared.runningApplications
+                    .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != myBundleId }
+                    .first
             }
             
-            // Wait a bit for the app to activate, then simulate paste
+            appToActivate?.activate(options: [.activateIgnoringOtherApps])
+            
+            // Wait for the app to activate, then simulate paste
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                self?.simulatePaste()
+                self.simulatePaste()
             }
         }
     }
     
     private func simulatePaste() {
-        let source = CGEventSource(stateID: .combinedSessionState)
+        // Use AppleScript to simulate Cmd+V - this provides better compatibility but requires permissions
+        let script = """
+        tell application "System Events"
+            keystroke "v" using command down
+        end tell
+        """
         
-        // Key down
-        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true) // V key
-        keyDown?.flags = .maskCommand
-        keyDown?.post(tap: .cghidEventTap)
-        
-        // Key up
-        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
-        keyUp?.flags = .maskCommand
-        keyUp?.post(tap: .cghidEventTap)
+        var error: NSDictionary?
+        if let appleScript = NSAppleScript(source: script) {
+            appleScript.executeAndReturnError(&error)
+            
+            if let error = error {
+                let errorNumber = error["NSAppleScriptErrorNumber"] as? Int ?? 0
+                // -1743 = "Not authorized to send Apple events"
+                // 1002 = "Not allowed to send keystrokes" (requires Accessibility)
+                if errorNumber == -1743 || errorNumber == 1002 {
+                    PermissionManager.shared.showPermissionRequiredNotification()
+                }
+            }
+        }
     }
 }
 

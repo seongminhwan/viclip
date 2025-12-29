@@ -41,6 +41,15 @@ else
     exit 1
 fi
 
+# Copy app icon
+echo "🎨 Copying app icon..."
+if [ -f "Sources/Viclip/Resources/AppIcon.icns" ]; then
+    cp "Sources/Viclip/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/"
+    echo "   ✅ AppIcon.icns copied"
+else
+    echo "   ⚠️ AppIcon.icns not found"
+fi
+
 # Copy resource bundles (Highlightr, KeyboardShortcuts, etc.)
 echo "📁 Copying resource bundles..."
 for bundle in "$BUILD_DIR"/*.bundle; do
@@ -94,6 +103,8 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
     <string>NSApplication</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Viclip needs to control System Events to paste clipboard content into other applications.</string>
 </dict>
 </plist>
 EOF
