@@ -59,11 +59,34 @@ struct PreferencesView: View {
 enum PopupPosition: String, CaseIterable {
     case menuBar = "menuBar"
     case center = "center"
+    case mouseCursor = "mouseCursor"
     
     var displayName: String {
         switch self {
         case .menuBar: return "Menu Bar"
         case .center: return "Screen Center"
+        case .mouseCursor: return "Mouse Cursor"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .menuBar: return "Window appears below menu bar icon"
+        case .center: return "Window appears at screen center"
+        case .mouseCursor: return "Window appears at mouse cursor"
+        }
+    }
+}
+
+// MARK: - Menu Bar Fallback (when icon is hidden by Bartender etc)
+enum MenuBarFallback: String, CaseIterable {
+    case topCenter = "topCenter"
+    case screenCenter = "screenCenter"
+    
+    var displayName: String {
+        switch self {
+        case .topCenter: return "Top Center"
+        case .screenCenter: return "Screen Center"
         }
     }
 }
@@ -73,6 +96,7 @@ struct GeneralSettingsView: View {
     @AppStorage("historyLimit") private var historyLimit = 1000
     @AppStorage("showInDock") private var showInDock = false
     @AppStorage("popupPosition") private var popupPosition = PopupPosition.menuBar.rawValue
+    @AppStorage("menuBarFallback") private var menuBarFallback = MenuBarFallback.topCenter.rawValue
     
     // Retention settings (defaults off)
     @AppStorage("retentionMaxItemsEnabled") private var retentionMaxItemsEnabled = false
@@ -123,19 +147,41 @@ struct GeneralSettingsView: View {
                                 }
                             }
                             .pickerStyle(.segmented)
-                            .frame(width: 180)
+                            .frame(width: 240)
                         }
                         
+                        // Dynamic description based on selected position
                         HStack {
                             Image(systemName: "info.circle")
                                 .font(.system(size: 11))
                                 .foregroundColor(.secondary)
-                            Text(popupPosition == PopupPosition.center.rawValue 
-                                ? "Window appears at screen center"
-                                : "Window appears below menu bar icon")
+                            Text(PopupPosition(rawValue: popupPosition)?.description ?? "")
                                 .font(.system(size: 11))
                                 .foregroundColor(.secondary)
                             Spacer()
+                        }
+                        
+                        // Fallback option for Menu Bar position (e.g., when using Bartender)
+                        if popupPosition == PopupPosition.menuBar.rawValue {
+                            Divider()
+                            
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Fallback Position")
+                                        .font(.system(size: 13))
+                                    Text("When menu bar icon is hidden (e.g., by Bartender)")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Picker("", selection: $menuBarFallback) {
+                                    ForEach(MenuBarFallback.allCases, id: \.rawValue) { fallback in
+                                        Text(fallback.displayName).tag(fallback.rawValue)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                                .frame(width: 180)
+                            }
                         }
                     }
                 }
@@ -181,86 +227,6 @@ struct GeneralSettingsView: View {
                             }
                         } message: {
                             Text("This will permanently delete ALL clipboard history from the database, including favorites. This action cannot be undone.")
-                        }
-                    }
-                }
-                
-                // Retention Settings Card (NEW)
-                SettingsCard(title: "Auto-Cleanup (Retention)", icon: "clock.arrow.circlepath") {
-                    VStack(spacing: 16) {
-                        // Info text
-                        HStack {
-                            Image(systemName: "info.circle")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                            Text("Automatically delete old items to save storage. Disabled by default.")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                            Spacer()
-                        }
-                        
-                        Divider()
-                        
-                        // Max Items Limit
-                        VStack(spacing: 8) {
-                            HStack {
-                                Toggle("", isOn: $retentionMaxItemsEnabled)
-                                    .toggleStyle(.switch)
-                                    .labelsHidden()
-                                Text("Limit total saved items")
-                                    .font(.system(size: 13))
-                                Spacer()
-                            }
-                            
-                            if retentionMaxItemsEnabled {
-                                HStack {
-                                    Text("Keep at most:")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.secondary)
-                                    Spacer()
-                                    Picker("", selection: $retentionMaxItems) {
-                                        Text("500").tag(500)
-                                        Text("1,000").tag(1000)
-                                        Text("5,000").tag(5000)
-                                        Text("10,000").tag(10000)
-                                    }
-                                    .pickerStyle(.segmented)
-                                    .frame(width: 220)
-                                }
-                                .padding(.leading, 40)
-                            }
-                        }
-                        
-                        Divider()
-                        
-                        // Max Age Limit
-                        VStack(spacing: 8) {
-                            HStack {
-                                Toggle("", isOn: $retentionMaxAgeEnabled)
-                                    .toggleStyle(.switch)
-                                    .labelsHidden()
-                                Text("Delete items older than")
-                                    .font(.system(size: 13))
-                                Spacer()
-                            }
-                            
-                            if retentionMaxAgeEnabled {
-                                HStack {
-                                    Text("Max age:")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.secondary)
-                                    Spacer()
-                                    Picker("", selection: $retentionMaxAgeDays) {
-                                        Text("7 days").tag(7)
-                                        Text("30 days").tag(30)
-                                        Text("90 days").tag(90)
-                                        Text("1 year").tag(365)
-                                    }
-                                    .pickerStyle(.segmented)
-                                    .frame(width: 220)
-                                }
-                                .padding(.leading, 40)
-                            }
                         }
                     }
                 }

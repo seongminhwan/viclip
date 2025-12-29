@@ -22,6 +22,7 @@ class KeyBindingManager: ObservableObject {
         case position = "Locate in Timeline"
         case addToQueue = "Add to Paste Queue"
         case escape = "Exit / Cancel"
+        case advancedFilter = "Advanced Filter"
         
         // Preview mode commands
         case previewOCR = "OCR Extract Text"
@@ -51,6 +52,7 @@ class KeyBindingManager: ObservableObject {
             case .position: return KeyBinding(key: "p", keyCode: 35, requiresShift: false)
             case .addToQueue: return KeyBinding(key: "q", keyCode: 12, requiresShift: false)
             case .escape: return KeyBinding(key: "⎋", keyCode: 53, requiresShift: false)
+            case .advancedFilter: return KeyBinding(key: "⌘F", keyCode: 3, requiresShift: false, requiresCommand: true)
             
             // Preview mode bindings
             case .previewOCR: return KeyBinding(key: "o", keyCode: 31, requiresShift: false)

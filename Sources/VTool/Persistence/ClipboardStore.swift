@@ -136,6 +136,36 @@ class ClipboardStore {
         }
     }
     
+    /// Load items with advanced filter
+    func loadFilteredItems(filter: FilterQuery, limit: Int = 100, offset: Int = 0) -> [ClipboardItem] {
+        do {
+            let dbItems = try databaseManager.fetchFilteredItems(filter: filter, limit: limit, offset: offset)
+            return dbItems.compactMap { dbItem -> ClipboardItem? in
+                var item = dbItem.toClipboardItem()
+                
+                if dbItem.isExternal, let data = largeFileStorage.retrieve(for: dbItem.id) {
+                    item?.content = contentFromData(data, type: dbItem.contentType)
+                    item?.isExternallyStored = true
+                }
+                
+                return item
+            }
+        } catch {
+            print("Error loading filtered items: \(error)")
+            return []
+        }
+    }
+    
+    /// Get distinct source apps for filter dropdown
+    func getDistinctSourceApps() -> [String] {
+        do {
+            return try databaseManager.fetchDistinctSourceApps()
+        } catch {
+            print("Error fetching source apps: \(error)")
+            return []
+        }
+    }
+    
     // MARK: - Groups
     
     func loadGroups() -> [FavoriteGroup] {

@@ -183,22 +183,58 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         guard let window = mainWindow, let screen = NSScreen.main else { return }
         
-        // Position window
+        // Position window based on settings
         let positionSetting = UserDefaults.standard.string(forKey: "popupPosition") ?? "center"
+        let fallbackSetting = UserDefaults.standard.string(forKey: "menuBarFallback") ?? "topCenter"
         let screenFrame = screen.visibleFrame
         
         var windowFrame = window.frame
         
-        if positionSetting == "menuBar", let button = statusItem.button, let buttonWindow = button.window {
-            // Position below menu bar item
-            let buttonRect = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
-            windowFrame.origin.x = buttonRect.midX - windowFrame.width / 2
-            windowFrame.origin.y = buttonRect.minY - windowFrame.height - 5
-        } else {
+        switch positionSetting {
+        case "menuBar":
+            // Try to position below menu bar item
+            var usedMenuBarPosition = false
+            if let button = statusItem.button,
+               let buttonWindow = button.window,
+               buttonWindow.isVisible,
+               button.frame.width > 0,
+               buttonWindow.frame.origin.x > 0 {
+                let buttonRect = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
+                if buttonRect.minX > 0 && buttonRect.minY > 0 {
+                    windowFrame.origin.x = buttonRect.midX - windowFrame.width / 2
+                    windowFrame.origin.y = buttonRect.minY - windowFrame.height - 5
+                    usedMenuBarPosition = true
+                }
+            }
+            
+            // Fallback if menu bar position failed (e.g., hidden by Bartender)
+            if !usedMenuBarPosition {
+                if fallbackSetting == "topCenter" {
+                    // Fixed position at top center of screen (below menu bar area)
+                    windowFrame.origin.x = screenFrame.midX - windowFrame.width / 2
+                    windowFrame.origin.y = screenFrame.maxY - windowFrame.height - 30  // 30px below top
+                } else {
+                    // Fallback to screen center
+                    windowFrame.origin.x = screenFrame.midX - windowFrame.width / 2
+                    windowFrame.origin.y = screenFrame.midY - windowFrame.height / 2 + 50
+                }
+            }
+            
+        case "mouseCursor":
+            // Position near mouse cursor
+            let mouseLocation = NSEvent.mouseLocation
+            windowFrame.origin.x = mouseLocation.x - windowFrame.width / 2
+            windowFrame.origin.y = mouseLocation.y - windowFrame.height - 20  // Below cursor
+            
+        default:  // "center"
             // Center on screen
             windowFrame.origin.x = screenFrame.midX - windowFrame.width / 2
             windowFrame.origin.y = screenFrame.midY - windowFrame.height / 2 + 50
         }
+        
+        // Ensure window stays within screen bounds
+        windowFrame.origin.x = max(screenFrame.minX + 10, min(windowFrame.origin.x, screenFrame.maxX - windowFrame.width - 10))
+        windowFrame.origin.y = max(screenFrame.minY + 10, min(windowFrame.origin.y, screenFrame.maxY - windowFrame.height - 10))
         
         window.setFrame(windowFrame, display: false)
         

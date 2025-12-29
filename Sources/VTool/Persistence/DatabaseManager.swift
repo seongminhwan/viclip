@@ -31,6 +31,22 @@ class DatabaseManager {
             config.prepareDatabase { db in
                 // Enable foreign keys
                 try db.execute(sql: "PRAGMA foreign_keys = ON")
+                
+                // Register custom REGEXP function for regex search
+                let regexp = DatabaseFunction("REGEXP", argumentCount: 2, pure: true) { args in
+                    guard let pattern = String.fromDatabaseValue(args[0]),
+                          let text = String.fromDatabaseValue(args[1]) else {
+                        return false
+                    }
+                    do {
+                        let regex = try NSRegularExpression(pattern: pattern, options: [])
+                        let range = NSRange(text.startIndex..., in: text)
+                        return regex.firstMatch(in: text, options: [], range: range) != nil
+                    } catch {
+                        return false
+                    }
+                }
+                db.add(function: regexp)
             }
             
             dbQueue = try DatabaseQueue(path: databaseURL.path, configuration: config)
@@ -218,6 +234,140 @@ class DatabaseManager {
         }
     }
     
+    /// Fetch items with advanced filter
+    /// - Parameters:
+    ///   - filter: FilterQuery with all filter criteria
+    ///   - limit: Max items to return
+    ///   - offset: Offset for pagination
+    func fetchFilteredItems(filter: FilterQuery, limit: Int = 100, offset: Int = 0) throws -> [DBClipboardItem] {
+        try dbQueue?.read { db in
+            var conditions: [String] = []
+            var args: [any DatabaseValueConvertible] = []
+            
+            // Keyword search
+            if !filter.keyword.isEmpty {
+                if filter.isRegex {
+                    // Use custom REGEXP function (registered in setupDatabase)
+                    if filter.caseSensitive {
+                        conditions.append("content REGEXP ?")
+                        args.append(filter.keyword)
+                    } else {
+                        // Case insensitive regex with (?i) flag
+                        conditions.append("content REGEXP ?")
+                        args.append("(?i)" + filter.keyword)
+                    }
+                } else {
+                    if filter.caseSensitive {
+                        conditions.append("content LIKE ? ESCAPE '\\'")
+                        args.append("%\(filter.keyword)%")
+                    } else {
+                        conditions.append("LOWER(content) LIKE LOWER(?) ESCAPE '\\'")
+                        args.append("%\(filter.keyword)%")
+                    }
+                }
+            }
+            
+            // Content type filter
+            if filter.contentTypes.count < ContentTypeFilter.allCases.count {
+                let types = filter.contentTypes.map { "'\($0.rawValue)'" }.joined(separator: ", ")
+                conditions.append("content_type IN (\(types))")
+            }
+            
+            // Source app filter
+            if !filter.sourceApps.isEmpty {
+                let placeholders = filter.sourceApps.map { _ in "?" }.joined(separator: ", ")
+                conditions.append("source_app IN (\(placeholders))")
+                args.append(contentsOf: filter.sourceApps)
+            }
+            
+            // Source bundle ID filter
+            if !filter.sourceBundleIds.isEmpty {
+                let placeholders = filter.sourceBundleIds.map { _ in "?" }.joined(separator: ", ")
+                conditions.append("source_bundle_id IN (\(placeholders))")
+                args.append(contentsOf: filter.sourceBundleIds)
+            }
+            
+            // Date range filter
+            let dateRange = filter.effectiveDateRange
+            if let from = dateRange.from {
+                conditions.append("created_at >= ?")
+                args.append(from.timeIntervalSince1970)
+            }
+            if let to = dateRange.to {
+                conditions.append("created_at <= ?")
+                args.append(to.timeIntervalSince1970)
+            }
+            
+            // Favorites only
+            if filter.favoritesOnly {
+                conditions.append("is_favorite = 1")
+            }
+            
+            // Build WHERE clause
+            let whereClause = conditions.isEmpty ? "" : "WHERE " + conditions.joined(separator: " AND ")
+            
+            // Handle tag filter
+            if !filter.tagIds.isEmpty {
+                let tagPlaceholders = filter.tagIds.map { _ in "?" }.joined(separator: ", ")
+                
+                if filter.tagMatchMode == .all {
+                    // Must have ALL specified tags
+                    let sql = """
+                        SELECT clipboard_items.* FROM clipboard_items
+                        WHERE clipboard_items.id IN (
+                            SELECT item_id FROM clipboard_item_tags
+                            WHERE tag_id IN (\(tagPlaceholders))
+                            GROUP BY item_id
+                            HAVING COUNT(DISTINCT tag_id) = ?
+                        )
+                        \(conditions.isEmpty ? "" : "AND " + conditions.joined(separator: " AND "))
+                        ORDER BY position DESC
+                        LIMIT ? OFFSET ?
+                    """
+                    var allArgs: [any DatabaseValueConvertible] = filter.tagIds
+                    allArgs.append(filter.tagIds.count)
+                    allArgs.append(contentsOf: args)
+                    allArgs.append(limit)
+                    allArgs.append(offset)
+                    return try DBClipboardItem.fetchAll(db, sql: sql, arguments: StatementArguments(allArgs))
+                } else {
+                    // Must have ANY of the specified tags
+                    let sql = """
+                        SELECT DISTINCT clipboard_items.* FROM clipboard_items
+                        INNER JOIN clipboard_item_tags ON clipboard_items.id = clipboard_item_tags.item_id
+                        WHERE clipboard_item_tags.tag_id IN (\(tagPlaceholders))
+                        \(conditions.isEmpty ? "" : "AND " + conditions.joined(separator: " AND "))
+                        ORDER BY clipboard_items.position DESC
+                        LIMIT ? OFFSET ?
+                    """
+                    var allArgs: [any DatabaseValueConvertible] = filter.tagIds
+                    allArgs.append(contentsOf: args)
+                    allArgs.append(limit)
+                    allArgs.append(offset)
+                    return try DBClipboardItem.fetchAll(db, sql: sql, arguments: StatementArguments(allArgs))
+                }
+            } else {
+                // No tag filter
+                let sql = """
+                    SELECT * FROM clipboard_items
+                    \(whereClause)
+                    ORDER BY position DESC
+                    LIMIT ? OFFSET ?
+                """
+                args.append(limit)
+                args.append(offset)
+                return try DBClipboardItem.fetchAll(db, sql: sql, arguments: StatementArguments(args))
+            }
+        } ?? []
+    }
+    
+    /// Get distinct source apps from the database
+    func fetchDistinctSourceApps() throws -> [String] {
+        try dbQueue?.read { db in
+            try String.fetchAll(db, sql: "SELECT DISTINCT source_app FROM clipboard_items WHERE source_app IS NOT NULL ORDER BY source_app")
+        } ?? []
+    }
+
     /// Get the maximum position value in the database
     func maxPosition() throws -> Int {
         try dbQueue?.read { db in

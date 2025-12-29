@@ -5,6 +5,12 @@ struct StorageSettingsView: View {
     @ObservedObject private var storageSettings = StorageSettings.shared
     @ObservedObject private var clipboardMonitor = ClipboardMonitor.shared
     
+    // Retention settings (migrated from General settings)
+    @AppStorage("retentionMaxItemsEnabled") private var retentionMaxItemsEnabled = false
+    @AppStorage("retentionMaxItems") private var retentionMaxItems = 1000
+    @AppStorage("retentionMaxAgeEnabled") private var retentionMaxAgeEnabled = false
+    @AppStorage("retentionMaxAgeDays") private var retentionMaxAgeDays = 30
+    
     @State private var showMigrationDialog = false
     @State private var showClearConfirmation = false
     @State private var migrationAction: MigrationAction = .none
@@ -48,29 +54,81 @@ struct StorageSettingsView: View {
                     .frame(maxWidth: .infinity)
                 }
                 
-                // History Limit Card
+                // History Limit Card (Auto-Cleanup)
                 SettingsCard(title: "History Limit", icon: "clock.arrow.circlepath") {
-                    VStack(spacing: 12) {
-                        HStack {
-                            Text("Maximum items to keep")
-                                .font(.system(size: 13))
-                            
-                            Spacer()
-                            
-                            TextField("", value: $storageSettings.maxHistoryCount, format: .number)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 100)
-                                .multilineTextAlignment(.trailing)
-                        }
-                        
+                    VStack(spacing: 16) {
                         HStack {
                             Image(systemName: "info.circle")
                                 .font(.system(size: 11))
                                 .foregroundColor(.secondary)
-                            Text("Older items will be automatically removed")
+                            Text("Automatically delete old items to save storage. Disabled by default.")
                                 .font(.system(size: 11))
                                 .foregroundColor(.secondary)
                             Spacer()
+                        }
+                        
+                        Divider()
+                        
+                        // Max Items Limit
+                        VStack(spacing: 8) {
+                            HStack {
+                                Toggle("", isOn: $retentionMaxItemsEnabled)
+                                    .toggleStyle(.switch)
+                                    .labelsHidden()
+                                Text("Limit total saved items")
+                                    .font(.system(size: 13))
+                                Spacer()
+                            }
+                            
+                            if retentionMaxItemsEnabled {
+                                HStack {
+                                    Text("Keep at most:")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    Picker("", selection: $retentionMaxItems) {
+                                        Text("500").tag(500)
+                                        Text("1,000").tag(1000)
+                                        Text("5,000").tag(5000)
+                                        Text("10,000").tag(10000)
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .frame(width: 220)
+                                }
+                                .padding(.leading, 40)
+                            }
+                        }
+                        
+                        Divider()
+                        
+                        // Max Age Limit
+                        VStack(spacing: 8) {
+                            HStack {
+                                Toggle("", isOn: $retentionMaxAgeEnabled)
+                                    .toggleStyle(.switch)
+                                    .labelsHidden()
+                                Text("Delete items older than")
+                                    .font(.system(size: 13))
+                                Spacer()
+                            }
+                            
+                            if retentionMaxAgeEnabled {
+                                HStack {
+                                    Text("Max age:")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    Picker("", selection: $retentionMaxAgeDays) {
+                                        Text("7 days").tag(7)
+                                        Text("30 days").tag(30)
+                                        Text("90 days").tag(90)
+                                        Text("1 year").tag(365)
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .frame(width: 220)
+                                }
+                                .padding(.leading, 40)
+                            }
                         }
                     }
                 }
@@ -78,24 +136,36 @@ struct StorageSettingsView: View {
                 // Large File Storage Card
                 SettingsCard(title: "Large File Storage", icon: "doc.badge.gearshape") {
                     VStack(spacing: 16) {
-                        Toggle(isOn: Binding(
-                            get: { storageSettings.enableExternalStorage },
-                            set: { newValue in
-                                if newValue != storageSettings.enableExternalStorage {
-                                    migrationAction = newValue ? .enableExternal : .disableExternal
-                                    showMigrationDialog = true
-                                }
-                            }
-                        )) {
-                            VStack(alignment: .leading, spacing: 2) {
+                        // Toggle row with left-aligned switch
+                        VStack(spacing: 8) {
+                            HStack {
+                                Toggle("", isOn: Binding(
+                                    get: { storageSettings.enableExternalStorage },
+                                    set: { newValue in
+                                        if newValue != storageSettings.enableExternalStorage {
+                                            migrationAction = newValue ? .enableExternal : .disableExternal
+                                            showMigrationDialog = true
+                                        }
+                                    }
+                                ))
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                                
                                 Text("Store large files externally")
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(.system(size: 13))
+                                Spacer()
+                            }
+                            
+                            HStack {
+                                Image(systemName: "info.circle")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
                                 Text("Improves database performance for large content")
                                     .font(.system(size: 11))
                                     .foregroundColor(.secondary)
+                                Spacer()
                             }
                         }
-                        .toggleStyle(.switch)
                         
                         if storageSettings.enableExternalStorage {
                             Divider()
@@ -131,6 +201,7 @@ struct StorageSettingsView: View {
                                         .foregroundColor(.secondary)
                                 }
                             }
+                            .padding(.leading, 40)
                         }
                     }
                 }

@@ -1,128 +1,234 @@
-# VTool - Mac Clipboard Manager
+# VTool - Vim-style Clipboard Manager for macOS
 
-[![Build](https://github.com/seongminhwan/viclip/actions/workflows/build.yml/badge.svg)](https://github.com/seongminhwan/viclip/actions/workflows/build.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<p align="center">
+  <img src="docs/icon.png" alt="VTool Icon" width="128">
+</p>
 
-A powerful native macOS clipboard manager with VIM-style navigation, iCloud sync, and sequential pasting.
-
+A powerful, keyboard-driven clipboard manager for macOS with Vim-style navigation, advanced filtering, tag management, and iCloud sync support.
 
 ## Features
 
-- 📋 **Clipboard History** - Automatically records all copied content
-- 🔍 **Smart Search** - Filter history with context-aware search (shows when & where you copied)
-- ⌨️ **VIM Navigation** - Use j/k, gg/G, and quick select (1-9)
-- 📑 **Sequential Paste** - Copy multiple items and paste them in order
-- ⭐ **Favorites & Groups** - Organize frequently used snippets
-- ☁️ **iCloud Sync** - Sync across all your Macs
-- 🔒 **Privacy Filter** - Exclude password managers and sensitive content
-- 🖼️ **Image Support** - Store and preview copied images
-
-## Requirements
-
-- macOS 12.0 or later
-- Xcode 15.0 or later (for development)
-- Apple Developer account (optional, for iCloud sync)
+- 🎹 **Vim-style Navigation** - Navigate with `j`/`k`, jump with `gg`/`G`
+- 🔍 **Advanced Filtering** - Search by keyword, content type, source app, date range, tags
+- 🏷️ **Tag Management** - Organize clipboard items with custom tags
+- ⭐ **Favorites** - Mark important items for quick access
+- 📋 **Paste Queue** - Queue multiple items for sequential pasting
+- 👁️ **Quick Preview** - Preview images, rich text, and code with syntax highlighting
+- 🔄 **iCloud Sync** - Sync clipboard history across all your Macs
+- 🌙 **Dark Mode** - Beautiful dark theme support
 
 ## Installation
 
-### From Source
+### Download
+Download the latest release from [GitHub Releases](https://github.com/seongminhwan/viclip/releases).
 
+### Build from Source
 ```bash
-# Clone the repository
-cd /path/to/vtool
-
-# Build with Swift Package Manager
+git clone https://github.com/seongminhwan/viclip.git
+cd viclip
 swift build -c release
-
-# Or open in Xcode
-open Package.swift
+./scripts/package.sh
 ```
 
-### Using Xcode
-
-1. Open `Package.swift` in Xcode
-2. Select your signing team
-3. Build and run (⌘+R)
-
-## Usage
+## Keyboard Shortcuts
 
 ### Global Hotkey
+| Shortcut | Action |
+|----------|--------|
+| `⌘⇧V` | Open/Close VTool (configurable) |
 
-- `⌘+Shift+V` - Toggle VTool popup
+---
 
-### VIM Keybindings
+### NORMAL Mode (Main Window)
 
-| Key | Action |
-|-----|--------|
-| `j` / `↓` | Move down |
-| `k` / `↑` | Move up |
+#### Navigation
+| Shortcut | Action |
+|----------|--------|
+| `j` | Move down |
+| `k` | Move up |
 | `gg` | Jump to top |
 | `G` | Jump to bottom |
-| `Enter` | Paste selected item |
+| `1-9` | Quick select item 1-9 |
+
+#### Actions
+| Shortcut | Action |
+|----------|--------|
+| `⏎` | Paste selected item |
+| `⌘⏎` | Paste as plain text |
 | `d` | Delete item |
-| `f` | Toggle favorite |
-| `/` | Enter search mode |
-| `1-9` | Quick select |
-| `Esc` | Close / Cancel |
+| `⌃F` | Toggle favorite |
+| `v` | Quick preview |
+| `q` | Add to paste queue |
+| `p` | Locate in timeline (position mode) |
 
-### Sequential Pasting
+#### Mode Switching
+| Shortcut | Action |
+|----------|--------|
+| `f` | Enter SEARCH mode (focus search input) |
+| `⌘F` | Open Advanced Filter panel |
+| `F` (Shift+f) | Open type filter |
+| `:` | Open command menu |
+| `⇧T` | Toggle TAG panel |
+| `ESC` | Close popup / Clear filter |
 
-1. Open VTool (`⌘+Shift+V`)
-2. Click `+` button on items to add to queue
-3. Each subsequent paste will use the next item in queue
+---
 
-## Configuration
+### SEARCH Mode
 
-Open Settings from the menu bar icon to configure:
+| Shortcut | Action |
+|----------|--------|
+| Type | Search clipboard items |
+| `⏎` | Paste first result |
+| `⌃P` | Exit search and locate item |
+| `ESC` | Exit to NORMAL mode |
 
-- **General** - History limit, launch at login
-- **Hotkeys** - Customize global shortcuts
-- **Privacy** - Exclude apps and keywords
-- **Sync** - Enable/disable iCloud sync
+---
 
-## Privacy
+### PREVIEW Mode
 
-VTool respects your privacy:
+| Shortcut | Action |
+|----------|--------|
+| `j` | Scroll down |
+| `k` | Scroll up |
+| `⌃D` | Half page down |
+| `⌃U` | Half page up |
+| `⌘C` | Copy content |
+| `o` | OCR extract text (for images) |
+| `ESC` | Close preview |
 
-- All data is stored locally by default
-- Password managers are excluded automatically
-- iCloud sync is opt-in
-- No analytics or tracking
+---
 
-## Development
+### TAG Mode (Tag Panel Open)
 
-### Project Structure
+#### Tag List Navigation
+| Shortcut | Action |
+|----------|--------|
+| `j` | Move down in tag list |
+| `k` | Move up in tag list |
+| `⏎` | Filter by selected tag |
+| `l` | Switch to history list |
+| `c` | Create new tag |
+| `r` | Rename selected tag |
+| `d` | Delete selected tag |
+| `ESC` | Close tag panel |
 
-```
-VTool/
-├── Sources/VTool/
-│   ├── VToolApp.swift          # App entry point
-│   ├── Models/
-│   │   └── ClipboardItem.swift # Data models
-│   ├── Services/
-│   │   ├── ClipboardMonitor.swift
-│   │   ├── VIMEngine.swift
-│   │   ├── SequentialPaster.swift
-│   │   └── PrivacyFilter.swift
-│   ├── Persistence/
-│   │   ├── ClipboardStore.swift
-│   │   └── CloudKitSync.swift
-│   ├── Views/
-│   │   ├── PopupWindowView.swift
-│   │   ├── ClipboardItemRow.swift
-│   │   └── PreferencesView.swift
-│   └── Resources/
-│       ├── Info.plist
-│       └── VTool.entitlements
-└── Package.swift
-```
+#### History List (when focused)
+| Shortcut | Action |
+|----------|--------|
+| `j` | Move down |
+| `k` | Move up |
+| `Space` | Toggle tag on item |
+| `h` | Return to tag list |
 
-### Dependencies
+---
 
-- [HotKey](https://github.com/soffes/HotKey) - Global hotkeys
-- [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) - Hotkey UI
-- [LaunchAtLogin](https://github.com/sindresorhus/LaunchAtLogin-Modern) - Launch at login
+### Advanced Filter Panel (`⌘F`)
+
+#### Global Shortcuts
+| Shortcut | Action |
+|----------|--------|
+| `⌘K` | Toggle Keyword section |
+| `⌘C` | Toggle Content Type section |
+| `⌘S` | Toggle Source App section |
+| `⌘T` | Toggle Tags section |
+| `⌘D` | Toggle Date Range section |
+| `⌘O` | Toggle Options section |
+| `⌘R` | Reset all filters |
+| `⌘⏎` | Apply filter |
+| `ESC` | Close panel |
+
+#### Keyword Section (when expanded)
+| Shortcut | Action |
+|----------|--------|
+| `⌃R` | Toggle Regex |
+| `⌃C` | Toggle Case Sensitive |
+
+#### Date Range Section (when expanded)
+| Shortcut | Action |
+|----------|--------|
+| `⌃A` | All Time |
+| `⌃L` | Last Hour |
+| `⌃T` | Today |
+| `⌃Y` | Yesterday |
+| `⌃W` | Last 7 Days |
+| `⌃M` | Last 30 Days |
+| `⌃C` | Custom Range |
+| `⌃F` | Focus From date (in Custom) |
+
+#### List Sections (Content Type / Source App / Tags)
+| Shortcut | Action |
+|----------|--------|
+| `j` | Move down |
+| `k` | Move up |
+| `Space` | Toggle selection |
+
+---
+
+### POSITION Mode
+
+| Shortcut | Action |
+|----------|--------|
+| `j` | Expand range down |
+| `k` | Expand range up |
+| `⌘⏎` | Paste selected range |
+| `ESC` | Exit position mode |
+
+---
+
+### Type Filter Mode (`F`)
+
+| Shortcut | Action |
+|----------|--------|
+| `1` | Filter: Text only |
+| `2` | Filter: Images only |
+| `3` | Filter: Files only |
+| `4` | Filter: Rich Text only |
+| `a` | Show all types |
+| `ESC` | Exit filter mode |
+
+---
+
+## Mode Indicators
+
+The mode indicator in the top-left shows current state:
+
+| Indicator | Color | Description |
+|-----------|-------|-------------|
+| `NORMAL` | 🟢 Green | Default browsing mode |
+| `SEARCH` | 🟠 Orange | Search input focused |
+| `TAG` | 🔵 Teal | Tag panel open |
+| `COMMAND` | 🟣 Purple | Command menu open |
+| `POSITION` | 🔵 Cyan | Position/range mode |
+| `FILTERED` | 🟡 Yellow | Search or filter active |
+
+---
+
+## Settings
+
+Access settings via Menu Bar → VTool → Preferences (`⌘,`)
+
+- **General**: Global hotkey, startup options, auto-cleanup
+- **Appearance**: Theme, preview settings
+- **Hotkeys**: Customize all keyboard shortcuts
+- **Privacy**: Excluded apps, sensitive content
+- **Storage**: History limits, large file storage
+- **Sync**: iCloud sync settings
+
+---
+
+## Requirements
+
+- macOS 13.0 (Ventura) or later
+- Apple Silicon or Intel Mac
 
 ## License
 
-MIT License
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request.
+
+---
+
+**Made with ❤️ for keyboard enthusiasts**

@@ -9,6 +9,7 @@ class ClipboardMonitor: ObservableObject {
     @Published var favoriteGroups: [FavoriteGroup] = []
     @Published var searchResults: [ClipboardItem] = []
     @Published var isSearching: Bool = false
+    @Published var activeFilter: FilterQuery?  // Advanced filter state
     
     // Pagination
     private let pageSize = 100
@@ -261,6 +262,36 @@ class ClipboardMonitor: ObservableObject {
         if loadedItems.count < 100 {
             hasMore = false
         }
+    }
+    
+    /// Set advanced filter and reload items
+    func setAdvancedFilter(_ filter: FilterQuery?) {
+        activeFilter = filter
+        currentOffset = 0
+        hasMore = true
+        
+        if let filter = filter, filter.isActive {
+            let loadedItems = store.loadFilteredItems(filter: filter, limit: 100, offset: 0)
+            items = loadedItems
+            
+            if loadedItems.count < 100 {
+                hasMore = false
+            }
+        } else {
+            // No filter or empty filter - load all items
+            activeFilter = nil
+            let loadedItems = store.loadItems(limit: 100, offset: 0)
+            items = loadedItems
+            
+            if loadedItems.count < 100 {
+                hasMore = false
+            }
+        }
+    }
+    
+    /// Get distinct source apps for filter dropdown
+    func getDistinctSourceApps() -> [String] {
+        store.getDistinctSourceApps()
     }
     
     /// Load more items (next page)

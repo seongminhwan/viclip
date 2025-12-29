@@ -60,6 +60,10 @@ struct PopupWindowView: View {
     @State private var isHelpPanelOpen: Bool = false
     @State private var helpScrollIndex: Int = 0
     
+    // Advanced filter state
+    @State private var isAdvancedFilterOpen: Bool = false
+    @State private var advancedFilter: FilterQuery = FilterQuery()
+    
     @Environment(\.colorScheme) private var colorScheme
     
     enum ContentTypeFilter: String, CaseIterable {
@@ -206,17 +210,29 @@ struct PopupWindowView: View {
         }
     }
     
+    /// Display mode - shows "FILTERED" when filter is active, otherwise same as currentMode
+    private var displayMode: String {
+        // Show FILTERED when search or advanced filter is active
+        if currentMode == "NORMAL" {
+            if !searchText.isEmpty || clipboardMonitor.activeFilter?.isActive == true {
+                return "FILTERED"
+            }
+        }
+        return currentMode
+    }
+    
     /// NORMAL mode means search is not focused - all VIM commands work
     private var isNormalMode: Bool {
         !isSearchFocused && !isCommandMode
     }
     
     private var modeColor: Color {
-        switch currentMode {
+        switch displayMode {
         case "COMMAND": return .purple
         case "POSITION": return .cyan
         case "SEARCH": return .orange
         case "TAG": return .teal
+        case "FILTERED": return .yellow
         default: return .green
         }
     }
@@ -298,6 +314,11 @@ struct PopupWindowView: View {
             // Tag association popup overlay
             if isTagAssociationPopupOpen {
                 tagAssociationPopupOverlay
+            }
+            
+            // Advanced filter overlay
+            if isAdvancedFilterOpen {
+                advancedFilterOverlay
             }
         }
         .frame(minWidth: 700, minHeight: 500)
@@ -416,6 +437,47 @@ struct PopupWindowView: View {
             .background(theme.secondaryBackground)
             .cornerRadius(12)
             .shadow(color: .black.opacity(0.3), radius: 20)
+        }
+    }
+    
+    // MARK: - Advanced Filter Overlay
+    
+    private var advancedFilterOverlay: some View {
+        ZStack {
+            // Dim background
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    isAdvancedFilterOpen = false
+                }
+            
+            // Filter panel
+            AdvancedFilterView(
+                filter: $advancedFilter,
+                isPresented: $isAdvancedFilterOpen
+            )
+        }
+    }
+    
+    // MARK: - Active Filter Indicator
+    
+    private var filterIndicator: some View {
+        Group {
+            if clipboardMonitor.activeFilter?.isActive == true {
+                HStack(spacing: 4) {
+                    Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                    Text("Filtered")
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(theme.accent)
+                .cornerRadius(4)
+                .onTapGesture {
+                    isAdvancedFilterOpen = true
+                }
+            }
         }
     }
     
@@ -912,6 +974,22 @@ struct PopupWindowView: View {
             return true
         }
         
+        // Advanced filter panel handling - ESC to close
+        if isAdvancedFilterOpen {
+            if keyCode == 53 {  // ESC
+                isAdvancedFilterOpen = false
+                return true
+            }
+            // Let the panel handle other keys
+            return false
+        }
+        
+        // ⌘F to open advanced filter (only in NORMAL mode)
+        if keyCode == 3 && event.modifierFlags.contains(.command) && !isSearchFocused && !isPreviewMode && !isCommandMode && !isTypeFilterMode {
+            isAdvancedFilterOpen = true
+            return true
+        }
+        
         // Preview mode handling
         if isPreviewMode {
             let kb = keyBindingManager
@@ -1127,6 +1205,21 @@ struct PopupWindowView: View {
                     exitPositionMode()
                     return true
                 }
+                // If in FILTERED state (search or filter active), clear first before closing
+                if displayMode == "FILTERED" {
+                    // Clear search text
+                    if !searchText.isEmpty {
+                        searchText = ""
+                        debouncedSearchText = ""
+                        clipboardMonitor.loadFirstPage()
+                    }
+                    // Clear advanced filter
+                    if clipboardMonitor.activeFilter?.isActive == true {
+                        advancedFilter.reset()
+                        clipboardMonitor.setAdvancedFilter(nil)
+                    }
+                    return true
+                }
                 // In NORMAL mode with no special modes - close popup
                 print("DEBUG: ESC in NORMAL mode, calling closePopup()")
                 AppDelegate.shared?.closePopup()
@@ -1288,6 +1381,21 @@ struct PopupWindowView: View {
                 exitPositionMode()
                 return true
             }
+            // If in FILTERED state (search or filter active), clear first before closing
+            if displayMode == "FILTERED" {
+                // Clear search text
+                if !searchText.isEmpty {
+                    searchText = ""
+                    debouncedSearchText = ""
+                    clipboardMonitor.loadFirstPage()
+                }
+                // Clear advanced filter
+                if clipboardMonitor.activeFilter?.isActive == true {
+                    advancedFilter.reset()
+                    clipboardMonitor.setAdvancedFilter(nil)
+                }
+                return true
+            }
             // In NORMAL mode with no special modes - close popup
             AppDelegate.shared?.closePopup()
             return true
@@ -1296,6 +1404,11 @@ struct PopupWindowView: View {
         case .previewOCR, .previewCopy, .previewScrollUp, .previewScrollDown,
              .previewHalfPageUp, .previewHalfPageDown, .previewOpenExternal:
             return false
+            
+        // Advanced filter - handled by keyboard shortcut directly
+        case .advancedFilter:
+            isAdvancedFilterOpen = true
+            return true
         }
         
         return false
@@ -2150,7 +2263,7 @@ struct PopupWindowView: View {
                 Circle()
                     .fill(modeColor)
                     .frame(width: 8, height: 8)
-                Text(currentMode)
+                Text(displayMode)
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundColor(theme.secondaryText)
             }
