@@ -103,6 +103,42 @@ struct PopupWindowView: View {
         ]
     }
     
+    private var filteredPinnedItems: [ClipboardItem] {
+        var filteredPinned = pinnedItems
+        
+        // Apply search filter to pinned items
+        if !searchText.isEmpty {
+            let query = searchText.lowercased()
+            filteredPinned = filteredPinned.filter { item in
+                item.content.preview.lowercased().contains(query)
+            }
+        }
+        
+        // Apply type filter to pinned items
+        switch selectedTypeFilter {
+        case .all:
+            break
+        case .text:
+            filteredPinned = filteredPinned.filter {
+                if case .text = $0.content { return true }
+                if case .richText = $0.content { return true }
+                return false
+            }
+        case .image:
+            filteredPinned = filteredPinned.filter {
+                if case .image = $0.content { return true }
+                return false
+            }
+        case .file:
+            filteredPinned = filteredPinned.filter {
+                if case .fileURL = $0.content { return true }
+                return false
+            }
+        }
+        
+        return filteredPinned
+    }
+
     private var filteredItems: [ClipboardItem] {
         // If in position mode, show items around the anchor
         if isPositionMode, let anchor = positionAnchorItem {
@@ -139,41 +175,8 @@ struct PopupWindowView: View {
             }
         }
         
-        // Filter pinned items by search text and type filter
-        var filteredPinned = pinnedItems
-        
-        // Apply search filter to pinned items
-        if !searchText.isEmpty {
-            let query = searchText.lowercased()
-            filteredPinned = filteredPinned.filter { item in
-                item.content.preview.lowercased().contains(query)
-            }
-        }
-        
-        // Apply type filter to pinned items
-        switch selectedTypeFilter {
-        case .all:
-            break
-        case .text:
-            filteredPinned = filteredPinned.filter {
-                if case .text = $0.content { return true }
-                if case .richText = $0.content { return true }
-                return false
-            }
-        case .image:
-            filteredPinned = filteredPinned.filter {
-                if case .image = $0.content { return true }
-                return false
-            }
-        case .file:
-            filteredPinned = filteredPinned.filter {
-                if case .fileURL = $0.content { return true }
-                return false
-            }
-        }
-        
         // Prepend filtered pinned items
-        return filteredPinned + items
+        return filteredPinnedItems + items
     }
     
     private func getItemsAroundAnchor(_ anchor: ClipboardItem) -> [ClipboardItem] {
@@ -1257,8 +1260,33 @@ struct PopupWindowView: View {
                 return true
             } else if !isTagPanelFocused, let item = selectedItem {
                 // Pin/unpin the currently selected history item
-                clipboardMonitor.togglePin(item: item)
-                loadPinnedItems()
+                
+                // Determine boundaries
+                let pinnedCount = filteredPinnedItems.count
+                let isPinnedSection = selectedIndex < pinnedCount
+                
+                if isPinnedSection {
+                    // Pinned Section: Allow toggle (Unpin)
+                    clipboardMonitor.togglePin(item: item)
+                    loadPinnedItems()
+                    // Selection stays at same index (next item shifts up)
+                } else {
+                    // History Section
+                    if item.isDirectPinned {
+                        // Already pinned - enforce "Pin once" rule
+                        NSSound.beep()
+                    } else {
+                        // Not pinned - Pin it
+                        let countBefore = filteredItems.count
+                        
+                        clipboardMonitor.togglePin(item: item)
+                        loadPinnedItems()
+                        
+                        // Move selection +2: +1 for new pinned item, +1 for next history item
+                        // Clamp to countBefore (which matches the max valid index of the new list size N+1)
+                        selectedIndex = min(selectedIndex + 2, countBefore)
+                    }
+                }
                 return true
             }
             return true
@@ -2042,22 +2070,12 @@ struct PopupWindowView: View {
                     .padding(.bottom, 4)
                 }
                 
-                // Syntax highlighting for text
-                if SyntaxHighlighter.shared.isLikelyCode(text),
-                   let highlighted = SyntaxHighlighter.shared.highlight(text) {
-                    Text(AttributedString(highlighted))
-                        .font(.custom("Menlo", size: 12)) // Ensure monospaced font
-                        .textSelection(.enabled)
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(red: 0.15, green: 0.16, blue: 0.18))
-                        .cornerRadius(4)
-                } else {
-                    Text(text)
-                        .font(.system(size: 13, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                // Simple text display (no syntax highlighting for performance)
+                // Full syntax highlighting is only in preview mode (v key)
+                Text(text)
+                    .font(.system(size: 13, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             
         case .fileURL(let path):
