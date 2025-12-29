@@ -78,6 +78,7 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
     var virtualId: String?  // For pinned items, uses "PIN_<uuid>" format
     var isDirectPinned: Bool  // Whether this item is directly pinned
     var pinType: PinType  // Pin type for color differentiation
+    var alias: String?  // User-defined alias/name for display
     
     /// The ID used for SwiftUI's ForEach/List identification
     var displayId: String {
@@ -98,9 +99,17 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
         return id
     }
     
+    /// Display text: prefer alias if set, otherwise use content preview
+    var displayText: String {
+        if let alias = alias, !alias.isEmpty {
+            return alias
+        }
+        return content.preview
+    }
+    
     enum CodingKeys: String, CodingKey {
         case id, content, sourceApp, sourceAppBundleId, createdAt, position
-        case isFavorite, groupId, isExternallyStored, contentSize, isDirectPinned
+        case isFavorite, groupId, isExternallyStored, contentSize, isDirectPinned, alias
         // virtualId and pinType are runtime only
     }
     
@@ -117,7 +126,8 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
         contentSize: Int = 0,
         virtualId: String? = nil,
         isDirectPinned: Bool = false,
-        pinType: PinType = .none
+        pinType: PinType = .none,
+        alias: String? = nil
     ) {
         self.id = id
         self.content = content
@@ -132,6 +142,7 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
         self.virtualId = virtualId
         self.isDirectPinned = isDirectPinned
         self.pinType = pinType
+        self.alias = alias
     }
     
     // Custom decoder to handle legacy JSON without new fields
@@ -151,6 +162,7 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
         isExternallyStored = try container.decodeIfPresent(Bool.self, forKey: .isExternallyStored) ?? false
         contentSize = try container.decodeIfPresent(Int.self, forKey: .contentSize) ?? content.dataSize
         isDirectPinned = try container.decodeIfPresent(Bool.self, forKey: .isDirectPinned) ?? false
+        alias = try container.decodeIfPresent(String.self, forKey: .alias)
         
         // Runtime-only fields
         virtualId = nil

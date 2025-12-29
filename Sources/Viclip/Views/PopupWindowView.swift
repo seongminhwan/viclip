@@ -65,6 +65,12 @@ struct PopupWindowView: View {
     @State private var isAdvancedFilterOpen: Bool = false
     @State private var advancedFilter: FilterQuery = FilterQuery()
     
+    // Rename/alias state for inline editing
+    @State private var isRenamingItem: Bool = false
+    @State private var renamingItemId: UUID? = nil
+    @State private var editingItemAlias: String = ""
+    @FocusState private var isRenameInputFocused: Bool
+    
     @Environment(\.colorScheme) private var colorScheme
     
     enum ContentTypeFilter: String, CaseIterable {
@@ -107,11 +113,19 @@ struct PopupWindowView: View {
     private var filteredPinnedItems: [ClipboardItem] {
         var filteredPinned = pinnedItems
         
-        // Apply search filter to pinned items
+        // Apply search filter to pinned items (includes alias)
         if !searchText.isEmpty {
             let query = searchText.lowercased()
             filteredPinned = filteredPinned.filter { item in
-                item.content.preview.lowercased().contains(query)
+                // Check content preview
+                if item.content.preview.lowercased().contains(query) {
+                    return true
+                }
+                // Check alias
+                if let alias = item.alias, alias.lowercased().contains(query) {
+                    return true
+                }
+                return false
             }
         }
         
@@ -1159,6 +1173,33 @@ struct PopupWindowView: View {
             return false
         }
         
+        // Rename mode: handle Enter/Escape, let text field handle other keys
+        if isRenamingItem {
+            if keyCode == 36 {  // Enter to confirm
+                confirmRename()
+                return true
+            }
+            if keyCode == 53 {  // Escape to cancel
+                cancelRename()
+                return true
+            }
+            // Let text field handle other keys
+            return false
+        }
+        
+        // R key for rename (keyCode 15) - only in NORMAL mode
+        if keyCode == 15 && isNormalMode && !isTagPanelFocused && !isSearchFocused {
+            if let item = selectedItem {
+                isRenamingItem = true
+                renamingItemId = item.originalId
+                editingItemAlias = item.alias ?? item.content.preview
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.isRenameInputFocused = true
+                }
+                return true
+            }
+        }
+        
         // Enter key - paste selected (only in NORMAL mode, not SEARCH)
         if keyCode == 36 && !isSearchFocused {
             if let item = selectedItem {
@@ -1566,6 +1607,32 @@ struct PopupWindowView: View {
             print("Error loading pinned items: \(error)")
             pinnedItems = []
         }
+    }
+    
+    // MARK: - Rename/Alias Methods
+    
+    private func confirmRename() {
+        guard let itemId = renamingItemId else {
+            cancelRename()
+            return
+        }
+        
+        // Trim whitespace and determine if alias should be cleared
+        let trimmedAlias = editingItemAlias.trimmingCharacters(in: .whitespacesAndNewlines)
+        let aliasToSet: String? = trimmedAlias.isEmpty ? nil : trimmedAlias
+        
+        // Update via ClipboardMonitor
+        clipboardMonitor.setAlias(itemId: itemId, alias: aliasToSet)
+        
+        // Reset state
+        cancelRename()
+    }
+    
+    private func cancelRename() {
+        isRenamingItem = false
+        renamingItemId = nil
+        editingItemAlias = ""
+        isRenameInputFocused = false
     }
     
     private func handleTagPanelKey(keyCode: UInt16, event: NSEvent) -> Bool {
@@ -2405,26 +2472,87 @@ struct PopupWindowView: View {
                                     }
                                     .padding(.vertical, 4)
                                 }
-                                
-                                CompactItemRow(
-                                    item: item,
-                                    index: index,
-                                    isSelected: index == selectedIndex,
-                                    isFocused: !isTagPanelFocused,
-                                    isAnchor: isPositionMode && item.id == positionAnchorItem?.id,
-                                    isPinned: item.isPinnedItem,
-                                    isInSearchMode: isSearchFocused,
-                                    fontSize: themeManager.fontSize,
-                                    theme: theme
-                                )
-                                .id(item.displayId)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    selectedIndex = index
-                                    isSearchFocused = false  // Back to NORMAL mode
-                                }
-                                .onTapGesture(count: 2) {
-                                    clipboardMonitor.paste(item: item)
+                                // Show inline rename text field if this item is being renamed
+                                let isThisItemBeingRenamed = isRenamingItem && renamingItemId == item.originalId
+                                if isThisItemBeingRenamed {
+                                    HStack(spacing: 12) {
+                                        // Pencil icon with circle background
+                                        ZStack {
+                                            Circle()
+                                                .fill(Color.blue.opacity(0.2))
+                                                .frame(width: 24, height: 24)
+                                            Image(systemName: "pencil")
+                                                .font(.system(size: 11, weight: .medium))
+                                                .foregroundColor(.blue)
+                                        }
+                                        
+                                        // Text field with underline style
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Rename")
+                                                .font(.system(size: 9, weight: .medium))
+                                                .foregroundColor(.blue)
+                                            TextField("Enter alias...", text: $editingItemAlias)
+                                                .textFieldStyle(.plain)
+                                                .font(.system(size: themeManager.fontSize, weight: .medium))
+                                                .foregroundColor(theme.text)
+                                                .focused($isRenameInputFocused)
+                                                .onSubmit {
+                                                    confirmRename()
+                                                }
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        // Key hints as pill badges
+                                        HStack(spacing: 6) {
+                                            Text("⏎ Save")
+                                                .font(.system(size: 9, weight: .medium))
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(Color.green.opacity(0.8))
+                                                .cornerRadius(4)
+                                            Text("ESC")
+                                                .font(.system(size: 9, weight: .medium))
+                                                .foregroundColor(theme.secondaryText)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(theme.tertiaryBackground)
+                                                .cornerRadius(4)
+                                        }
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(theme.secondaryBackground)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(Color.blue.opacity(0.5), lineWidth: 1.5)
+                                            )
+                                    )
+                                    .id("RENAME_\(item.displayId)")  // Different id to force view update
+                                } else {
+                                    CompactItemRow(
+                                        item: item,
+                                        index: index,
+                                        isSelected: index == selectedIndex,
+                                        isFocused: !isTagPanelFocused,
+                                        isAnchor: isPositionMode && item.id == positionAnchorItem?.id,
+                                        isPinned: item.isPinnedItem,
+                                        isInSearchMode: isSearchFocused,
+                                        fontSize: themeManager.fontSize,
+                                        theme: theme
+                                    )
+                                    .id("ROW_\(item.displayId)")  // Different id to force view update
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        selectedIndex = index
+                                        isSearchFocused = false  // Back to NORMAL mode
+                                    }
+                                    .onTapGesture(count: 2) {
+                                        clipboardMonitor.paste(item: item)
+                                    }
                                 }
                             }
                         }
@@ -2612,6 +2740,20 @@ struct PopupWindowView: View {
             
             if let item = selectedItem {
                 VStack(spacing: 4) {
+                    // Show alias if present
+                    if let alias = item.alias, !alias.isEmpty {
+                        HStack {
+                            Text("Alias")
+                                .font(.system(size: themeManager.fontSize - 1))
+                                .foregroundColor(theme.secondaryText)
+                            Spacer()
+                            Text(alias)
+                                .font(.system(size: themeManager.fontSize - 1, weight: .medium))
+                                .foregroundColor(.blue)
+                                .lineLimit(1)
+                        }
+                    }
+                    
                     InfoRow(label: "Application", value: item.sourceApp ?? "Unknown", theme: theme, fontSize: themeManager.fontSize)
                     InfoRow(label: "Content type", value: item.content.typeName, theme: theme, fontSize: themeManager.fontSize)
                     InfoRow(label: "Copied at", value: formatDate(item.createdAt), theme: theme, fontSize: themeManager.fontSize)
@@ -2892,7 +3034,7 @@ struct CompactItemRow: View {
             
             // Content
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.content.preview)
+                Text(item.displayText)
                     .font(.system(size: fontSize, weight: isAnchor ? .semibold : .regular))
                     .foregroundColor(isAnchor ? .cyan : theme.text)
                     .lineLimit(1)
@@ -2920,6 +3062,25 @@ struct CompactItemRow: View {
                     .padding(.vertical, 2)
                     .background(Color.cyan)
                     .cornerRadius(4)
+            }
+            
+            // PIN label badge - shows on HISTORY items that are pinned (not on PIN section items)
+            // Check isDirectPinned but exclude items that are in PIN section (have virtualId)
+            if item.isDirectPinned && item.virtualId == nil {
+                Text("PINNED")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color.orange)
+                    .cornerRadius(3)
+            }
+            
+            // Alias indicator (shows when item has custom alias)
+            if let alias = item.alias, !alias.isEmpty {
+                Image(systemName: "tag.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(.green)
             }
             
             // Favorite indicator

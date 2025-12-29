@@ -80,6 +80,10 @@ class DatabaseManager {
                 if !columns.contains(where: { $0.name == "is_pinned" }) {
                     try db.execute(sql: "ALTER TABLE clipboard_items ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0")
                 }
+                // Migration: add alias column if not exists (for rename feature)
+                if !columns.contains(where: { $0.name == "alias" }) {
+                    try db.execute(sql: "ALTER TABLE clipboard_items ADD COLUMN alias TEXT")
+                }
             }
             
             // Create indexes
@@ -244,24 +248,28 @@ class DatabaseManager {
             var conditions: [String] = []
             var args: [any DatabaseValueConvertible] = []
             
-            // Keyword search
+            // Keyword search (includes alias field)
             if !filter.keyword.isEmpty {
                 if filter.isRegex {
                     // Use custom REGEXP function (registered in setupDatabase)
                     if filter.caseSensitive {
-                        conditions.append("content REGEXP ?")
+                        conditions.append("(content REGEXP ? OR alias REGEXP ?)")
+                        args.append(filter.keyword)
                         args.append(filter.keyword)
                     } else {
                         // Case insensitive regex with (?i) flag
-                        conditions.append("content REGEXP ?")
+                        conditions.append("(content REGEXP ? OR alias REGEXP ?)")
+                        args.append("(?i)" + filter.keyword)
                         args.append("(?i)" + filter.keyword)
                     }
                 } else {
                     if filter.caseSensitive {
-                        conditions.append("content LIKE ? ESCAPE '\\'")
+                        conditions.append("(content LIKE ? ESCAPE '\\' OR alias LIKE ? ESCAPE '\\')")
+                        args.append("%\(filter.keyword)%")
                         args.append("%\(filter.keyword)%")
                     } else {
-                        conditions.append("LOWER(content) LIKE LOWER(?) ESCAPE '\\'")
+                        conditions.append("(LOWER(content) LIKE LOWER(?) ESCAPE '\\' OR LOWER(alias) LIKE LOWER(?) ESCAPE '\\')")
+                        args.append("%\(filter.keyword)%")
                         args.append("%\(filter.keyword)%")
                     }
                 }
@@ -421,12 +429,12 @@ class DatabaseManager {
                     let sql = """
                         SELECT DISTINCT clipboard_items.* FROM clipboard_items
                         INNER JOIN clipboard_item_tags ON clipboard_items.id = clipboard_item_tags.item_id
-                        WHERE clipboard_items.content LIKE ?
+                        WHERE (clipboard_items.content LIKE ? OR clipboard_items.alias LIKE ?)
                         AND clipboard_item_tags.tag_id IN (\(placeholders))
                         ORDER BY clipboard_items.position DESC
                         LIMIT ? OFFSET ?
                     """
-                    var args: [any DatabaseValueConvertible] = ["%\(searchQuery)%"]
+                    var args: [any DatabaseValueConvertible] = ["%\(searchQuery)%", "%\(searchQuery)%"]
                     args.append(contentsOf: tagIds!)
                     args.append(limit)
                     args.append(offset)
@@ -434,58 +442,61 @@ class DatabaseManager {
                 } else {
                     let sql = """
                         SELECT * FROM clipboard_items
-                        WHERE content LIKE ?
+                        WHERE content LIKE ? OR alias LIKE ?
                         ORDER BY position DESC
                         LIMIT ? OFFSET ?
                     """
-                    return try DBClipboardItem.fetchAll(db, sql: sql, arguments: ["%\(searchQuery)%", limit, offset])
+                    return try DBClipboardItem.fetchAll(db, sql: sql, arguments: ["%\(searchQuery)%", "%\(searchQuery)%", limit, offset])
                 }
             } else {
-                // Use FTS5 for normal queries (faster), with fallback to LIKE if FTS fails
+                // Use FTS5 for content search, but also include alias via LIKE
+                // Since alias is not indexed in FTS, we need to check it separately
                 do {
                     // Validate FTS table integrity - this triggers an exception if FTS schema is corrupted
                     _ = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM clipboard_fts")
                     if hasTagFilter {
                         let placeholders = tagIds!.map { _ in "?" }.joined(separator: ", ")
+                        // Search content via FTS5 OR alias via LIKE
                         let sql = """
                             SELECT DISTINCT clipboard_items.* FROM clipboard_items
-                            JOIN clipboard_fts ON clipboard_items.rowid = clipboard_fts.rowid
+                            LEFT JOIN clipboard_fts ON clipboard_items.rowid = clipboard_fts.rowid
                             INNER JOIN clipboard_item_tags ON clipboard_items.id = clipboard_item_tags.item_id
-                            WHERE clipboard_fts MATCH ?
+                            WHERE (clipboard_fts MATCH ? OR clipboard_items.alias LIKE ?)
                             AND clipboard_item_tags.tag_id IN (\(placeholders))
                             ORDER BY clipboard_items.position DESC
                             LIMIT ? OFFSET ?
                         """
                         let safeQuery = searchQuery.trimmingCharacters(in: .whitespaces)
-                        var args: [any DatabaseValueConvertible] = ["\"\(safeQuery)\"*"]
+                        var args: [any DatabaseValueConvertible] = ["\"\(safeQuery)\"*", "%\(safeQuery)%"]
                         args.append(contentsOf: tagIds!)
                         args.append(limit)
                         args.append(offset)
                         return try DBClipboardItem.fetchAll(db, sql: sql, arguments: StatementArguments(args))
                     } else {
+                        // Search content via FTS5 OR alias via LIKE
                         let sql = """
-                            SELECT clipboard_items.* FROM clipboard_items
-                            JOIN clipboard_fts ON clipboard_items.rowid = clipboard_fts.rowid
-                            WHERE clipboard_fts MATCH ?
+                            SELECT DISTINCT clipboard_items.* FROM clipboard_items
+                            LEFT JOIN clipboard_fts ON clipboard_items.rowid = clipboard_fts.rowid
+                            WHERE clipboard_fts MATCH ? OR clipboard_items.alias LIKE ?
                             ORDER BY clipboard_items.position DESC
                             LIMIT ? OFFSET ?
                         """
                         let safeQuery = searchQuery.trimmingCharacters(in: .whitespaces)
-                        return try DBClipboardItem.fetchAll(db, sql: sql, arguments: ["\"\(safeQuery)\"*", limit, offset])
+                        return try DBClipboardItem.fetchAll(db, sql: sql, arguments: ["\"\(safeQuery)\"*", "%\(safeQuery)%", limit, offset])
                     }
                 } catch {
-                    // FTS failed (table corrupted), fallback to LIKE search
+                    // FTS failed (table corrupted), fallback to LIKE search (including alias)
                     if hasTagFilter {
                         let placeholders = tagIds!.map { _ in "?" }.joined(separator: ", ")
                         let sql = """
                             SELECT DISTINCT clipboard_items.* FROM clipboard_items
                             INNER JOIN clipboard_item_tags ON clipboard_items.id = clipboard_item_tags.item_id
-                            WHERE clipboard_items.content LIKE ?
+                            WHERE (clipboard_items.content LIKE ? OR clipboard_items.alias LIKE ?)
                             AND clipboard_item_tags.tag_id IN (\(placeholders))
                             ORDER BY clipboard_items.position DESC
                             LIMIT ? OFFSET ?
                         """
-                        var args: [any DatabaseValueConvertible] = ["%\(searchQuery)%"]
+                        var args: [any DatabaseValueConvertible] = ["%\(searchQuery)%", "%\(searchQuery)%"]
                         args.append(contentsOf: tagIds!)
                         args.append(limit)
                         args.append(offset)
@@ -493,11 +504,11 @@ class DatabaseManager {
                     } else {
                         let sql = """
                             SELECT * FROM clipboard_items
-                            WHERE content LIKE ?
+                            WHERE content LIKE ? OR alias LIKE ?
                             ORDER BY position DESC
                             LIMIT ? OFFSET ?
                         """
-                        return try DBClipboardItem.fetchAll(db, sql: sql, arguments: ["%\(searchQuery)%", limit, offset])
+                        return try DBClipboardItem.fetchAll(db, sql: sql, arguments: ["%\(searchQuery)%", "%\(searchQuery)%", limit, offset])
                     }
                 }
             }
@@ -641,6 +652,7 @@ struct DBClipboardItem: Codable, FetchableRecord, PersistableRecord {
     var isPinned: Bool
     var position: Int
     var createdAt: Double
+    var alias: String?  // User-defined alias/name for the item
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -654,6 +666,7 @@ struct DBClipboardItem: Codable, FetchableRecord, PersistableRecord {
         case isPinned = "is_pinned"
         case position
         case createdAt = "created_at"
+        case alias
     }
     
     // Helper to extract text for FTS
@@ -673,6 +686,7 @@ struct DBClipboardItem: Codable, FetchableRecord, PersistableRecord {
         self.isPinned = item.isDirectPinned
         self.createdAt = item.createdAt.timeIntervalSince1970
         self.isExternal = false
+        self.alias = item.alias
         
         switch item.content {
         case .text(let string):
@@ -726,7 +740,8 @@ struct DBClipboardItem: Codable, FetchableRecord, PersistableRecord {
             isFavorite: isFavorite,
             isExternallyStored: isExternal,
             contentSize: contentSize,
-            isDirectPinned: isPinned
+            isDirectPinned: isPinned,
+            alias: alias
         )
     }
 }

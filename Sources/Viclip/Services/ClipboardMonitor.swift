@@ -221,6 +221,13 @@ class ClipboardMonitor: ObservableObject {
         }
     }
     
+    func setAlias(itemId: UUID, alias: String?) {
+        if let index = items.firstIndex(where: { $0.id == itemId }) {
+            items[index].alias = alias
+            store.updateItem(items[index])
+        }
+    }
+    
     func clearHistory() {
         // Clear all items from database
         store.clearAllItems()
