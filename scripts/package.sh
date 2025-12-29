@@ -1,12 +1,12 @@
 #!/bin/bash
 set -e
 
-# VTool App Bundle Packaging Script
+# Viclip App Bundle Packaging Script
 # Creates a macOS .app bundle from Swift build output
 
-APP_NAME="VTool"
-BUNDLE_ID="com.vtool.clipboard"
-VERSION="1.0.0"
+APP_NAME="Viclip"
+BUNDLE_ID="com.viclip.clipboard"
+VERSION="0.01"
 BUILD_DIR=".build/release"
 DIST_DIR="dist"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
@@ -56,7 +56,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
     <key>LSUIElement</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
-    <string>Copyright © 2024 VTool. MIT License.</string>
+    <string>Copyright © 2024 Viclip. MIT License.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSHighResolutionCapable</key>
@@ -66,8 +66,8 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 EOF
 
 # Copy entitlements if exists
-if [ -f "Sources/VTool/Resources/VTool.entitlements" ]; then
-    cp "Sources/VTool/Resources/VTool.entitlements" "$APP_BUNDLE/Contents/Resources/"
+if [ -f "Sources/Viclip/Resources/Viclip.entitlements" ]; then
+    cp "Sources/Viclip/Resources/Viclip.entitlements" "$APP_BUNDLE/Contents/Resources/"
 fi
 
 # Create PkgInfo

@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "VTool",
+    name: "Viclip",
     platforms: [
         .macOS(.v13)
     ],
     products: [
-        .executable(name: "VTool", targets: ["VTool"])
+        .executable(name: "Viclip", targets: ["Viclip"])
     ],
     dependencies: [
         .package(url: "https://github.com/soffes/HotKey", from: "0.2.0"),
@@ -18,7 +18,7 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "VTool",
+            name: "Viclip",
             dependencies: [
                 "HotKey",
                 "KeyboardShortcuts",
@@ -26,7 +26,7 @@ let package = Package(
                 .product(name: "GRDB", package: "GRDB.swift"),
                 "Highlightr"
             ],
-            path: "Sources/VTool",
+            path: "Sources/Viclip",
             exclude: ["Resources"]
         )
     ]

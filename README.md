@@ -1,7 +1,7 @@
-# VTool - Vim-style Clipboard Manager for macOS
+# Viclip - Vim-style Clipboard Manager for macOS
 
 <p align="center">
-  <img src="docs/icon.png" alt="VTool Icon" width="128">
+  <img src="docs/icon.png" alt="Viclip Icon" width="128">
 </p>
 
 A powerful, keyboard-driven clipboard manager for macOS with Vim-style navigation, advanced filtering, tag management, and iCloud sync support.
@@ -22,6 +22,12 @@ A powerful, keyboard-driven clipboard manager for macOS with Vim-style navigatio
 ### Download
 Download the latest release from [GitHub Releases](https://github.com/seongminhwan/viclip/releases).
 
+> ⚠️ **First Run - "App is damaged" Error**  
+> Since the app is not signed, macOS may block it. Run this in Terminal:
+> ```bash
+> xattr -cr /Applications/Viclip.app
+> ```
+
 ### Build from Source
 ```bash
 git clone https://github.com/seongminhwan/viclip.git
@@ -35,7 +41,7 @@ swift build -c release
 ### Global Hotkey
 | Shortcut | Action |
 |----------|--------|
-| `⌘⇧V` | Open/Close VTool (configurable) |
+| `⌘⇧V` | Open/Close Viclip (configurable) |
 
 ---
 
@@ -205,7 +211,7 @@ The mode indicator in the top-left shows current state:
 
 ## Settings
 
-Access settings via Menu Bar → VTool → Preferences (`⌘,`)
+Access settings via Menu Bar → Viclip → Preferences (`⌘,`)
 
 - **General**: Global hotkey, startup options, auto-cleanup
 - **Appearance**: Theme, preview settings

@@ -36,8 +36,8 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: VTool.app
-        path: dist/VTool.app
+        name: Viclip.app
+        path: dist/Viclip.app
         if-no-files-found: error
 
   release:
@@ -65,13 +65,13 @@ jobs:
     - name: Create DMG
       run: |
         mkdir -p dist/dmg
-        cp -r dist/VTool.app dist/dmg/
-        hdiutil create -volname "VTool" -srcfolder dist/dmg -ov -format UDZO dist/VTool.dmg
+        cp -r dist/Viclip.app dist/dmg/
+        hdiutil create -volname "Viclip" -srcfolder dist/dmg -ov -format UDZO dist/Viclip.dmg
     
     - name: Create ZIP
       run: |
         cd dist
-        zip -r VTool.zip VTool.app
+        zip -r Viclip.zip Viclip.app
     
     - name: Get Version
       id: version
@@ -80,23 +80,29 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        name: VTool ${{ steps.version.outputs.VERSION }}
+        name: Viclip ${{ steps.version.outputs.VERSION }}
         draft: false
         prerelease: false
         files: |
-          dist/VTool.dmg
-          dist/VTool.zip
+          dist/Viclip.dmg
+          dist/Viclip.zip
         body: |
-          ## VTool ${{ steps.version.outputs.VERSION }}
+          ## Viclip ${{ steps.version.outputs.VERSION }}
           
           A Vim-style clipboard manager for macOS.
           
           ### Downloads
-          - **VTool.dmg** - Disk image installer
-          - **VTool.zip** - Zipped application bundle
+          - **Viclip.dmg** - Disk image installer
+          - **Viclip.zip** - Zipped application bundle
           
           ### Requirements
           - macOS 13.0 (Ventura) or later
           - Apple Silicon or Intel Mac
+          
+          ### First Run
+          If macOS shows "Viclip is damaged", run:
+          ```bash
+          xattr -cr /Applications/Viclip.app
+          ```
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

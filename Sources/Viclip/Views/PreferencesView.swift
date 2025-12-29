@@ -772,11 +772,11 @@ struct AboutView: View {
                 .font(.system(size: 64))
                 .foregroundColor(.accentColor)
             
-            Text("VTool")
+            Text("Viclip")
                 .font(.largeTitle)
                 .fontWeight(.bold)
             
-            Text("Version 1.0.0")
+            Text("Version 0.01")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             
@@ -786,6 +786,9 @@ struct AboutView: View {
                 .foregroundColor(.secondary)
             
             Spacer()
+            
+            Link("GitHub", destination: URL(string: "https://github.com/seongminhwan/viclip")!)
+                .font(.caption)
             
             Text("Made with ❤️")
                 .font(.caption)
