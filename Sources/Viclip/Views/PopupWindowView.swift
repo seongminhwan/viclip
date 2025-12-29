@@ -2641,6 +2641,31 @@ struct PopupWindowView: View {
                         }
                     }
                     
+                    // PIN status display
+                    if item.isDirectPinned || item.isPinnedItem {
+                        HStack {
+                            Text("PIN Status")
+                                .font(.system(size: themeManager.fontSize - 1))
+                                .foregroundColor(theme.secondaryText)
+                            Spacer()
+                            HStack(spacing: 4) {
+                                Image(systemName: "pin.fill")
+                                    .font(.system(size: 10))
+                                let (statusText, statusColor): (String, Color) = {
+                                    switch item.pinType {
+                                    case .direct: return ("Direct", .orange)
+                                    case .tag: return ("Tag", .blue)
+                                    case .both: return ("Direct + Tag", .purple)
+                                    case .none: return (item.isDirectPinned ? "Direct" : "Pinned", .orange)
+                                    }
+                                }()
+                                Text(statusText)
+                                    .font(.system(size: themeManager.fontSize - 1, weight: .medium))
+                                    .foregroundColor(statusColor)
+                            }
+                        }
+                    }
+                    
                     // Tags display
                     TagsInfoRow(itemId: item.id.uuidString, tagService: tagService, theme: theme, fontSize: themeManager.fontSize)
                 }
