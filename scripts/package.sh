@@ -34,8 +34,22 @@ for bundle in "$BUILD_DIR"/*.bundle; do
         bundle_name=$(basename "$bundle")
         echo "   Copying $bundle_name"
         cp -R "$bundle" "$APP_BUNDLE/Contents/Resources/"
+        
+        # Ensure bundle has Info.plist (fix for Bundle(path:) returning nil)
+        bundle_plist="$APP_BUNDLE/Contents/Resources/$bundle_name/Info.plist"
+        if [ ! -f "$bundle_plist" ]; then
+            echo "   📝 Generating Info.plist for $bundle_name"
+            defaults write "$bundle_plist" CFBundleIdentifier "com.viclip.$bundle_name"
+            defaults write "$bundle_plist" CFBundleName "$bundle_name"
+            defaults write "$bundle_plist" CFBundlePackageType "BNDL"
+        fi
     fi
 done
+
+# Perform Ad-Hoc signing (fix for GitHub Actions builds loading resources)
+echo "🔏 Signing app (ad-hoc)..."
+codesign --force --deep --sign - "$APP_BUNDLE"
+
 
 # Create Info.plist
 cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
