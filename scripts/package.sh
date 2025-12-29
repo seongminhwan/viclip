@@ -34,7 +34,7 @@ for bundle in "$BUILD_DIR"/*.bundle; do
         bundle_name=$(basename "$bundle")
         echo "   Copying $bundle_name"
         cp -R "$bundle" "$APP_BUNDLE/Contents/Resources/"
-        
+
         # Ensure bundle has Info.plist (fix for Bundle(path:) returning nil)
         bundle_plist="$APP_BUNDLE/Contents/Resources/$bundle_name/Info.plist"
         if [ ! -f "$bundle_plist" ]; then
@@ -46,18 +46,7 @@ for bundle in "$BUILD_DIR"/*.bundle; do
     fi
 done
 
-# Perform Ad-Hoc signing with entitlements (fix for JSContext JIT crash)
-echo "🔏 Signing app (ad-hoc with entitlements)..."
-entitlements_path="Sources/Viclip/Resources/Viclip.entitlements"
-if [ -f "$entitlements_path" ]; then
-    codesign --force --deep --sign - --entitlements "$entitlements_path" "$APP_BUNDLE"
-else
-    echo "⚠️ Entitlements file not found, signing without them."
-    codesign --force --deep --sign - "$APP_BUNDLE"
-fi
-
-
-# Create Info.plist
+# Create Info.plist BEFORE signing
 cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -95,13 +84,33 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 </plist>
 EOF
 
-# Copy entitlements if exists
+# Copy entitlements to Resources BEFORE signing
 if [ -f "Sources/Viclip/Resources/Viclip.entitlements" ]; then
     cp "Sources/Viclip/Resources/Viclip.entitlements" "$APP_BUNDLE/Contents/Resources/"
 fi
 
-# Create PkgInfo
+# Create PkgInfo BEFORE signing
 echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
+
+# IMPORTANT: Signing MUST be the LAST step after all files are in place
+# Any modification to the bundle after signing will invalidate the signature
+echo "🔏 Signing app (ad-hoc with entitlements for JSContext JIT support)..."
+entitlements_path="Sources/Viclip/Resources/Viclip.entitlements"
+if [ -f "$entitlements_path" ]; then
+    codesign --force --deep --sign - --entitlements "$entitlements_path" "$APP_BUNDLE"
+    echo "   ✅ Signed with entitlements (JIT enabled)"
+else
+    echo "⚠️ Entitlements file not found, signing without them."
+    codesign --force --deep --sign - "$APP_BUNDLE"
+fi
+
+# Verify signature
+echo "🔍 Verifying signature..."
+if codesign --verify --verbose=1 "$APP_BUNDLE" 2>&1; then
+    echo "   ✅ Signature valid"
+else
+    echo "   ⚠️ Signature verification failed"
+fi
 
 echo "✅ App bundle created at: $APP_BUNDLE"
 echo "   Contents:"
