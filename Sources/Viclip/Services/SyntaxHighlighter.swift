@@ -6,7 +6,8 @@ import Highlightr
 class SyntaxHighlighter {
     static let shared = SyntaxHighlighter()
     
-    private let highlightr: Highlightr?
+    private var highlightr: Highlightr?
+    private var initAttempted = false
     
     /// Common code indicators for language detection
     private let languagePatterns: [(pattern: String, language: String)] = [
@@ -102,37 +103,44 @@ class SyntaxHighlighter {
     ]
     
     private init() {
-        // Try multiple bundle paths for Highlightr resources
-        highlightr = Self.createHighlightr()
-        highlightr?.setTheme(to: "atom-one-dark")
+        // Lazy init - don't create Highlightr until first use
+        // This avoids Bundle.module crash during app startup
     }
     
-    /// Create Highlightr instance with correct bundle path
-    private static func createHighlightr() -> Highlightr? {
-        // First try default initialization (works with swift run)
-        if let instance = Highlightr() {
-            return instance
+    /// Get or create Highlightr instance
+    /// IMPORTANT: Must detect environment BEFORE calling any Highlightr initializer
+    private func getHighlightr() -> Highlightr? {
+        if initAttempted {
+            return highlightr
+        }
+        initAttempted = true
+        
+        // Check if we're running as a packaged app by looking for our bundle structure
+        // In packaged app: Bundle.main.bundlePath contains ".app"
+        let isPackagedApp = Bundle.main.bundlePath.contains(".app")
+        
+        if isPackagedApp {
+            // For packaged app, we MUST use explicit path to avoid Bundle.module crash
+            // Find highlight.min.js in our Resources
+            if let resourcePath = Bundle.main.resourcePath {
+                let highlightrBundlePath = (resourcePath as NSString).appendingPathComponent("Highlightr_Highlightr.bundle")
+                let highlightJSPath = (highlightrBundlePath as NSString).appendingPathComponent("highlight.min.js")
+                
+                if FileManager.default.fileExists(atPath: highlightJSPath) {
+                    print("[SyntaxHighlighter] Found Highlightr at: \(highlightJSPath)")
+                    highlightr = Highlightr(highlightPath: highlightJSPath)
+                    highlightr?.setTheme(to: "atom-one-dark")
+                } else {
+                    print("[SyntaxHighlighter] Highlightr bundle not found at: \(highlightrBundlePath)")
+                }
+            }
+        } else {
+            // For swift run (development), default init works via Bundle.module
+            highlightr = Highlightr()
+            highlightr?.setTheme(to: "atom-one-dark")
         }
         
-        // For packaged app, try to find resources in app bundle
-        let resourceBundle = Bundle.main.resourceURL?
-            .appendingPathComponent("Highlightr_Highlightr.bundle")
-        
-        if let bundlePath = resourceBundle?.path,
-           let bundle = Bundle(path: bundlePath),
-           let highlightPath = bundle.path(forResource: "highlight.min", ofType: "js") {
-            return Highlightr(highlightPath: highlightPath)
-        }
-        
-        // Try Contents/Resources directly
-        if let appPath = Bundle.main.bundlePath as String?,
-           let bundle = Bundle(path: "\(appPath)/Contents/Resources/Highlightr_Highlightr.bundle"),
-           let highlightPath = bundle.path(forResource: "highlight.min", ofType: "js") {
-            return Highlightr(highlightPath: highlightPath)
-        }
-        
-        print("[SyntaxHighlighter] Failed to find Highlightr resources")
-        return nil
+        return highlightr
     }
     
     /// Check if content looks like code
@@ -180,7 +188,7 @@ class SyntaxHighlighter {
     
     /// Highlight code and return attributed string
     func highlight(_ code: String, language: String? = nil) -> NSAttributedString? {
-        guard let highlightr = highlightr else { return nil }
+        guard let highlightr = getHighlightr() else { return nil }
         
         let lang = language ?? detectLanguage(code) ?? "plaintext"
         return highlightr.highlight(code, as: lang)
@@ -188,7 +196,7 @@ class SyntaxHighlighter {
     
     /// Highlight code for a specific theme
     func highlight(_ code: String, language: String? = nil, theme: String) -> NSAttributedString? {
-        guard let highlightr = highlightr else { return nil }
+        guard let highlightr = getHighlightr() else { return nil }
         
         highlightr.setTheme(to: theme)
         let lang = language ?? detectLanguage(code) ?? "plaintext"
@@ -202,6 +210,6 @@ class SyntaxHighlighter {
     
     /// Update theme for current appearance
     func updateTheme(isDark: Bool) {
-        highlightr?.setTheme(to: themeForAppearance(isDark))
+        getHighlightr()?.setTheme(to: themeForAppearance(isDark))
     }
 }
