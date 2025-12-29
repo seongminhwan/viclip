@@ -1,13 +1,22 @@
 import Foundation
 import AppKit
 import Highlightr
+import os.log
 
 /// Service for syntax highlighting code content
 class SyntaxHighlighter {
     static let shared = SyntaxHighlighter()
-    
+
+    private static let logger = Logger(subsystem: "com.viclip.clipboard", category: "SyntaxHighlighter")
+
     private let highlightr: Highlightr?
-    
+
+    /// Whether the highlighter is available and working
+    private(set) var isAvailable: Bool = false
+
+    /// Error message if initialization failed
+    private(set) var initializationError: String?
+
     /// Common code indicators for language detection
     private let languagePatterns: [(pattern: String, language: String)] = [
         // Swift
@@ -102,10 +111,35 @@ class SyntaxHighlighter {
     ]
     
     private init() {
-        // Since we fixed Highlightr's init to safely handle bundles,
-        // we can just use the default initializer properly now.
-        highlightr = Highlightr()
-        highlightr?.setTheme(to: "atom-one-dark")
+        // Safely initialize Highlightr with error handling
+        // This can fail if JSContext cannot be created (missing JIT entitlements)
+        // Note: Highlightr uses JavaScriptCore which requires JIT entitlements
+        // If the app is not properly signed, Highlightr() returns nil instead of crashing
+        let tempHighlightr = Highlightr()
+        var errorMessage: String? = nil
+
+        if let h = tempHighlightr {
+            h.setTheme(to: "atom-one-dark")
+            Self.logger.info("SyntaxHighlighter initialized successfully")
+        } else {
+            errorMessage = "Syntax highlighting unavailable (Highlightr init failed - possibly missing JIT entitlements or resources)"
+            Self.logger.warning("\(errorMessage!, privacy: .public)")
+        }
+
+        self.highlightr = tempHighlightr
+        self.isAvailable = tempHighlightr != nil
+        self.initializationError = errorMessage
+
+        // Post notification for UI to potentially show warning
+        if let error = errorMessage {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("SyntaxHighlighterInitializationFailed"),
+                    object: nil,
+                    userInfo: ["error": error]
+                )
+            }
+        }
     }
     
     /// Check if content looks like code
@@ -152,20 +186,44 @@ class SyntaxHighlighter {
     }
     
     /// Highlight code and return attributed string
+    /// Returns nil if highlighting is unavailable or fails (caller should use fallback plain text)
     func highlight(_ code: String, language: String? = nil) -> NSAttributedString? {
-        guard let highlightr = highlightr else { return nil }
-        
+        guard isAvailable, let highlightr = highlightr else {
+            // Silently return nil - caller should handle fallback
+            return nil
+        }
+
         let lang = language ?? detectLanguage(code) ?? "plaintext"
-        return highlightr.highlight(code, as: lang)
+
+        // Wrap in autoreleasepool and catch any potential runtime issues
+        var result: NSAttributedString? = nil
+        autoreleasepool {
+            result = highlightr.highlight(code, as: lang)
+        }
+
+        if result == nil {
+            Self.logger.debug("Highlighting returned nil for language: \(lang, privacy: .public)")
+        }
+
+        return result
     }
-    
+
     /// Highlight code for a specific theme
+    /// Returns nil if highlighting is unavailable or fails (caller should use fallback plain text)
     func highlight(_ code: String, language: String? = nil, theme: String) -> NSAttributedString? {
-        guard let highlightr = highlightr else { return nil }
-        
+        guard isAvailable, let highlightr = highlightr else {
+            return nil
+        }
+
         highlightr.setTheme(to: theme)
         let lang = language ?? detectLanguage(code) ?? "plaintext"
-        return highlightr.highlight(code, as: lang)
+
+        var result: NSAttributedString? = nil
+        autoreleasepool {
+            result = highlightr.highlight(code, as: lang)
+        }
+
+        return result
     }
     
     /// Get appropriate theme based on appearance
