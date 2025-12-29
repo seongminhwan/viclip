@@ -1,7 +1,7 @@
 # Viclip - Vim-style Clipboard Manager for macOS
 
 <p align="center">
-  <img src="docs/icon.png" alt="Viclip Icon" width="128">
+  <img src="logo.png" alt="Viclip Icon" width="128">
 </p>
 
 A powerful, keyboard-driven clipboard manager for macOS with Vim-style navigation, advanced filtering, tag management, and iCloud sync support.
