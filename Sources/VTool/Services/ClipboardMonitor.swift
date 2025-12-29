@@ -221,10 +221,15 @@ class ClipboardMonitor: ObservableObject {
     }
     
     func clearHistory() {
-        let favoritesToKeep = items.filter { $0.isFavorite }
-        items = favoritesToKeep
-        // Note: This should also clear non-favorites from database
-        // For now, just update in-memory
+        // Clear all items from database
+        store.clearAllItems()
+        
+        // Clear in-memory items
+        items = []
+        currentQuery = nil
+        currentTagIds = []
+        currentOffset = 0
+        hasMore = false
     }
     
     // MARK: - Unified Pagination with Optional Search

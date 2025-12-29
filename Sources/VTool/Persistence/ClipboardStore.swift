@@ -106,6 +106,17 @@ class ClipboardStore {
         }
     }
     
+    /// Clear all items from database and rebuild FTS index
+    func clearAllItems() {
+        do {
+            try databaseManager.deleteAllItems()
+            // Also clear all external storage files
+            largeFileStorage.deleteAllExternalFiles()
+        } catch {
+            print("Error clearing all items: \(error)")
+        }
+    }
+    
     func searchItems(query: String) -> [ClipboardItem] {
         do {
             let dbItems = try databaseManager.searchItems(query: query)

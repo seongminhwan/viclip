@@ -13,6 +13,11 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
     
     private var panel: NSPanel?
     private var eventMonitor: Any?
+    private var currentItem: ClipboardItem?
+    private var ocrResult: String?
+    private var isPerformingOCR: Bool = false
+    private weak var ocrButton: NSButton?
+    private weak var copyOcrButton: NSButton?
     
     private override init() {
         super.init()
@@ -32,17 +37,17 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
         let windowRect = NSRect(x: position.x, y: position.y, width: size.width, height: size.height)
         panel = NSPanel(
             contentRect: windowRect,
-            styleMask: [.titled, .closable, .resizable, .nonactivatingPanel],
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
         
-        panel?.title = "Preview - ESC/v close, o open"
+        panel?.title = "Preview - ESC/v close, ? help"
         panel?.isReleasedWhenClosed = false
         panel?.level = .floating
         panel?.delegate = self
         panel?.hidesOnDeactivate = false
-        panel?.becomesKeyOnlyIfNeeded = true
+        panel?.becomesKeyOnlyIfNeeded = false  // Allow panel to become key window
         
         // Create content directly with NSImageView/NSTextView
         panel?.contentView = createContentView(for: item)
@@ -50,17 +55,48 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
         // Show panel
         panel?.makeKeyAndOrderFront(nil)
         
-        // Handle ESC/v key to close - store the monitor
+        // Store current item for shortcuts
+        currentItem = item
+        ocrResult = nil
+        isPerformingOCR = false
+        
+        // Handle keyboard shortcuts
+        let kb = KeyBindingManager.shared
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 || event.keyCode == 9 { // ESC or v
-                self?.close()
+            guard let self = self else { return event }
+            
+            // ESC or v to close
+            if event.keyCode == 53 || event.keyCode == 9 {
+                self.close()
                 return nil
             }
-            // o to open in external app
-            if event.keyCode == 31 {
-                self?.openInExternalApp(item)
+            
+            // ? to show help
+            if event.keyCode == 44 && event.modifierFlags.contains(.shift) {
+                self.showHelpAlert()
                 return nil
             }
+            
+            // Handle based on content type
+            if case .image = item.content {
+                // o for OCR
+                if kb.matches(event, command: .previewOCR) && !self.isPerformingOCR {
+                    self.triggerOCR()
+                    return nil
+                }
+                // ⌘C to copy OCR result
+                if kb.matches(event, command: .previewCopy) {
+                    self.copyOCRResultViaKeyboard()
+                    return nil
+                }
+            } else {
+                // For non-image content, o opens in external app
+                if kb.matches(event, command: .previewOpenExternal) {
+                    self.openInExternalApp(item)
+                    return nil
+                }
+            }
+            
             return event
         }
     }
@@ -79,11 +115,89 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
         // Close panel
         panel?.close()
         panel = nil
+        currentItem = nil
+        ocrResult = nil
+        isPerformingOCR = false
         
         // Reopen main popover after a short delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             AppDelegate.shared?.showMainPopover()
         }
+    }
+    
+    // MARK: - Keyboard Shortcut Actions
+    
+    private func triggerOCR() {
+        // Trigger the existing OCR button if available
+        if let button = ocrButton, button.isEnabled {
+            button.performClick(nil)
+        }
+    }
+    
+    private func copyOCRResultViaKeyboard() {
+        // Trigger the existing copy button if available and visible
+        if let button = copyOcrButton, !button.isHidden {
+            button.performClick(nil)
+        } else {
+            // Fallback: copy from ocrResult if available
+            guard let text = ocrResult, !text.isEmpty else {
+                panel?.title = "Preview - No OCR result to copy"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                    self.panel?.title = "Preview"
+                }
+                return
+            }
+            
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            panel?.title = "Preview - ✓ Copied!"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                self.panel?.title = "Preview"
+            }
+        }
+    }
+    
+    private func copyOCRResult() {
+        guard let text = ocrResult, !text.isEmpty else {
+            // Show feedback that there's nothing to copy
+            let originalTitle = panel?.title
+            panel?.title = "Preview - No OCR result to copy"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                self.panel?.title = originalTitle ?? "Preview"
+            }
+            return
+        }
+        
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        
+        // Show feedback
+        panel?.title = "Preview - ✓ Copied!"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            self.panel?.title = "Preview - OCR complete (⌘C to copy)"
+        }
+    }
+    
+    private func showHelpAlert() {
+        let kb = KeyBindingManager.shared
+        let alert = NSAlert()
+        alert.messageText = "Preview Shortcuts"
+        
+        if let item = currentItem, case .image = item.content {
+            alert.informativeText = """
+            \(kb.binding(for: .previewOCR).displayString) - Extract text (OCR)
+            \(kb.binding(for: .previewCopy).displayString) - Copy OCR result
+            ESC / v - Close preview
+            """
+        } else {
+            alert.informativeText = """
+            \(kb.binding(for: .previewOpenExternal).displayString) - Open in external app
+            ESC / v - Close preview
+            """
+        }
+        
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
     
     // NSWindowDelegate - handle window close
@@ -244,6 +358,10 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
                 objc_setAssociatedObject(ocrButton, &kResultViewKey, ocrResultView, .OBJC_ASSOCIATION_RETAIN)
                 objc_setAssociatedObject(ocrButton, &kTextViewKey, ocrTextView, .OBJC_ASSOCIATION_RETAIN)
                 objc_setAssociatedObject(ocrButton, &kCopyButtonKey, copyButton, .OBJC_ASSOCIATION_RETAIN)
+                
+                // Store references for keyboard shortcuts
+                self.ocrButton = ocrButton
+                self.copyOcrButton = copyButton
                 
                 // Copy button action
                 copyButton.target = self

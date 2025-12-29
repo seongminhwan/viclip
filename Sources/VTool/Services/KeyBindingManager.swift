@@ -99,13 +99,15 @@ class KeyBindingManager: ObservableObject {
         func matches(event: NSEvent) -> Bool {
             guard event.keyCode == keyCode else { return false }
             
-            let flags = event.modifierFlags
-            if requiresShift != flags.contains(.shift) { return false }
-            if requiresCommand != flags.contains(.command) { return false }
-            if requiresOption != flags.contains(.option) { return false }
-            if requiresControl != flags.contains(.control) { return false }
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             
-            return true
+            // Check each modifier - if required, it must be present; if not required, it must be absent
+            let shiftMatch = requiresShift == flags.contains(.shift)
+            let commandMatch = requiresCommand == flags.contains(.command)
+            let optionMatch = requiresOption == flags.contains(.option)
+            let controlMatch = requiresControl == flags.contains(.control)
+            
+            return shiftMatch && commandMatch && optionMatch && controlMatch
         }
     }
     

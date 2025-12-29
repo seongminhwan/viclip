@@ -280,11 +280,6 @@ struct PopupWindowView: View {
                 commandModeOverlay
             }
             
-            // Help panel overlay
-            if isHelpPanelOpen {
-                helpPanelOverlay
-            }
-            
             // Type filter mode overlay
             if isTypeFilterMode {
                 typeFilterOverlay
@@ -293,6 +288,11 @@ struct PopupWindowView: View {
             // Preview mode overlay
             if isPreviewMode, let item = previewingItem {
                 previewOverlay(for: item)
+            }
+            
+            // Help panel overlay (must be after preview to appear on top)
+            if isHelpPanelOpen {
+                helpPanelOverlay
             }
             
             // Tag association popup overlay
@@ -1758,15 +1758,44 @@ struct PopupWindowView: View {
                 
                 Divider()
                 
-                // Content with ScrollView for large content
-                ScrollViewReader { proxy in
+                // Content - use different views based on content type
+                switch item.content {
+                case .text, .richText:
+                    // Use ScrollableTextView for keyboard scroll support
+                    let displayText: String = {
+                        if case .text(let t) = item.content { return t }
+                        if case .richText(let data) = item.content,
+                           let attrStr = NSAttributedString(rtf: data, documentAttributes: nil) {
+                            return attrStr.string
+                        }
+                        return ""
+                    }()
+                    
+                    let attrString: NSAttributedString = {
+                        if SyntaxHighlighter.shared.isLikelyCode(displayText),
+                           let highlighted = SyntaxHighlighter.shared.highlight(displayText) {
+                            return highlighted
+                        } else {
+                            return NSAttributedString(string: displayText, attributes: [
+                                .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular),
+                                .foregroundColor: NSColor.textColor
+                            ])
+                        }
+                    }()
+                    
+                    ScrollableTextView(
+                        attributedText: attrString,
+                        scrollOffset: $previewScrollOffset,
+                        lineHeight: 20,
+                        pageHeight: 200
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    
+                default:
+                    // Use regular ScrollView for images and files
                     ScrollView {
                         previewContent(for: item)
                             .padding(16)
-                            .id("previewContent")
-                    }
-                    .onChange(of: previewScrollOffset) { _ in
-                        // Scroll animation handled by SwiftUI
                     }
                 }
                 
@@ -2883,4 +2912,93 @@ struct FlowLayout: Layout {
 
 #Preview {
     PopupWindowView()
+}
+
+// MARK: - Flipped Clip View for proper top-to-bottom scrolling
+class FlippedClipView: NSClipView {
+    override var isFlipped: Bool { true }
+}
+
+// MARK: - Scrollable Text View with Keyboard Navigation
+struct ScrollableTextView: NSViewRepresentable {
+    let attributedText: NSAttributedString
+    @Binding var scrollOffset: CGFloat
+    let lineHeight: CGFloat
+    let pageHeight: CGFloat
+    
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = false  // Keep scroller visible
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = true
+        scrollView.backgroundColor = NSColor(red: 0.1, green: 0.11, blue: 0.13, alpha: 1.0)
+        
+        // Use flipped clip view for proper top-aligned scrolling
+        let clipView = FlippedClipView()
+        clipView.drawsBackground = false
+        scrollView.contentView = clipView
+        
+        // Create text view with proper setup
+        let textView = NSTextView()
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.drawsBackground = false
+        textView.textContainerInset = NSSize(width: 12, height: 12)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.heightTracksTextView = false
+        textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        
+        // Set initial content
+        textView.textStorage?.setAttributedString(attributedText)
+        
+        scrollView.documentView = textView
+        
+        return scrollView
+    }
+    
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = scrollView.documentView as? NSTextView else { return }
+        
+        // Update container width to match scroll view
+        textView.textContainer?.size = NSSize(
+            width: scrollView.contentSize.width - 24,  // Account for insets
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        
+        // Update text content if changed
+        if textView.textStorage?.string != attributedText.string {
+            textView.textStorage?.setAttributedString(attributedText)
+        }
+        
+        // Layout to get correct size
+        textView.layoutManager?.ensureLayout(for: textView.textContainer!)
+        
+        // Size text view to fit content
+        if let layoutManager = textView.layoutManager, let container = textView.textContainer {
+            let usedRect = layoutManager.usedRect(for: container)
+            textView.frame = NSRect(
+                x: 0,
+                y: 0,
+                width: scrollView.contentSize.width,
+                height: max(usedRect.height + 24, scrollView.contentSize.height)  // At least scroll view height
+            )
+        }
+        
+        // Apply scroll offset
+        let contentHeight = textView.frame.height
+        let visibleHeight = scrollView.contentSize.height
+        let maxScroll = max(0, contentHeight - visibleHeight)
+        let clampedOffset = min(max(0, scrollOffset), maxScroll)
+        
+        let clipView = scrollView.contentView
+        let newOrigin = NSPoint(x: 0, y: clampedOffset)
+        if clipView.bounds.origin.y != clampedOffset {
+            clipView.setBoundsOrigin(newOrigin)
+        }
+    }
 }

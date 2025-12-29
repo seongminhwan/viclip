@@ -72,18 +72,18 @@ class DatabaseManager {
             try db.create(index: "idx_position", on: "clipboard_items", columns: ["position"], ifNotExists: true)
             try db.create(index: "idx_is_pinned", on: "clipboard_items", columns: ["is_pinned"], ifNotExists: true)
             
-            // FTS5 full-text search table - recreate if corrupted
+            // FTS5 full-text search table - use contentless mode for searchable text
+            // Note: contentless FTS doesn't try to sync with main table columns
             do {
-                // Check if FTS table works
+                // Check if FTS table exists and works
                 _ = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM clipboard_fts")
             } catch {
-                // Drop and recreate FTS table
+                // Drop and recreate FTS table with correct schema
                 try? db.execute(sql: "DROP TABLE IF EXISTS clipboard_fts")
                 try db.execute(sql: """
                     CREATE VIRTUAL TABLE IF NOT EXISTS clipboard_fts USING fts5(
                         text_content,
-                        content='clipboard_items',
-                        content_rowid='rowid',
+                        content='',
                         tokenize='unicode61'
                     )
                 """)
@@ -197,6 +197,27 @@ class DatabaseManager {
         }
     }
     
+    /// Delete all items from database and rebuild FTS index
+    func deleteAllItems() throws {
+        try dbQueue?.write { db in
+            // Delete all from main table
+            try db.execute(sql: "DELETE FROM clipboard_items")
+            
+            // Delete all from FTS and recreate
+            try? db.execute(sql: "DROP TABLE IF EXISTS clipboard_fts")
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE IF NOT EXISTS clipboard_fts USING fts5(
+                    text_content,
+                    content='',
+                    tokenize='unicode61'
+                )
+            """)
+            
+            // Also clear tags
+            try db.execute(sql: "DELETE FROM clipboard_item_tags")
+        }
+    }
+    
     /// Get the maximum position value in the database
     func maxPosition() throws -> Int {
         try dbQueue?.read { db in
@@ -272,6 +293,8 @@ class DatabaseManager {
             } else {
                 // Use FTS5 for normal queries (faster), with fallback to LIKE if FTS fails
                 do {
+                    // Validate FTS table integrity - this triggers an exception if FTS schema is corrupted
+                    _ = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM clipboard_fts")
                     if hasTagFilter {
                         let placeholders = tagIds!.map { _ in "?" }.joined(separator: ", ")
                         let sql = """
@@ -302,7 +325,6 @@ class DatabaseManager {
                     }
                 } catch {
                     // FTS failed (table corrupted), fallback to LIKE search
-                    print("FTS search failed, falling back to LIKE: \(error)")
                     if hasTagFilter {
                         let placeholders = tagIds!.map { _ in "?" }.joined(separator: ", ")
                         let sql = """

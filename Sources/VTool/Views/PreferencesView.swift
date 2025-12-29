@@ -80,6 +80,9 @@ struct GeneralSettingsView: View {
     @AppStorage("retentionMaxAgeEnabled") private var retentionMaxAgeEnabled = false
     @AppStorage("retentionMaxAgeDays") private var retentionMaxAgeDays = 30
     
+    // Clear history confirmation
+    @State private var showClearHistoryAlert = false
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -157,7 +160,7 @@ struct GeneralSettingsView: View {
                         Divider()
                         
                         Button(action: {
-                            ClipboardMonitor.shared.clearHistory()
+                            showClearHistoryAlert = true
                         }) {
                             HStack {
                                 Image(systemName: "trash")
@@ -171,6 +174,14 @@ struct GeneralSettingsView: View {
                             .cornerRadius(6)
                         }
                         .buttonStyle(.plain)
+                        .alert("Clear All History?", isPresented: $showClearHistoryAlert) {
+                            Button("Cancel", role: .cancel) {}
+                            Button("Clear All", role: .destructive) {
+                                ClipboardMonitor.shared.clearHistory()
+                            }
+                        } message: {
+                            Text("This will permanently delete ALL clipboard history from the database, including favorites. This action cannot be undone.")
+                        }
                     }
                 }
                 
