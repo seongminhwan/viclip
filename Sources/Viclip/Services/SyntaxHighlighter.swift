@@ -102,8 +102,37 @@ class SyntaxHighlighter {
     ]
     
     private init() {
-        highlightr = Highlightr()
+        // Try multiple bundle paths for Highlightr resources
+        highlightr = Self.createHighlightr()
         highlightr?.setTheme(to: "atom-one-dark")
+    }
+    
+    /// Create Highlightr instance with correct bundle path
+    private static func createHighlightr() -> Highlightr? {
+        // First try default initialization (works with swift run)
+        if let instance = Highlightr() {
+            return instance
+        }
+        
+        // For packaged app, try to find resources in app bundle
+        let resourceBundle = Bundle.main.resourceURL?
+            .appendingPathComponent("Highlightr_Highlightr.bundle")
+        
+        if let bundlePath = resourceBundle?.path,
+           let bundle = Bundle(path: bundlePath),
+           let highlightPath = bundle.path(forResource: "highlight.min", ofType: "js") {
+            return Highlightr(highlightPath: highlightPath)
+        }
+        
+        // Try Contents/Resources directly
+        if let appPath = Bundle.main.bundlePath as String?,
+           let bundle = Bundle(path: "\(appPath)/Contents/Resources/Highlightr_Highlightr.bundle"),
+           let highlightPath = bundle.path(forResource: "highlight.min", ofType: "js") {
+            return Highlightr(highlightPath: highlightPath)
+        }
+        
+        print("[SyntaxHighlighter] Failed to find Highlightr resources")
+        return nil
     }
     
     /// Check if content looks like code
@@ -114,7 +143,7 @@ class SyntaxHighlighter {
         let codeIndicators = [
             "func ", "def ", "class ", "import ", "const ", "let ", "var ",
             "if (", "for (", "while (", "switch ", "return ", "=>",
-            "{", "}", "()", "[];", "//", "/*", "#include", "#!/"
+            "{", "}", "()", "[];", "//", "/*", "#include", "#!"
         ]
         
         for indicator in codeIndicators {
