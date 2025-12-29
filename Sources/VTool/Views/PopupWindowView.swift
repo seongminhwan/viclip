@@ -22,6 +22,10 @@ struct PopupWindowView: View {
     @State private var typeFilterIndex: Int = 0  // Selected filter in dropdown
     @State private var isPreviewMode: Bool = false  // Full preview mode (v)
     @State private var previewingItem: ClipboardItem? = nil  // Item being previewed
+    @State private var previewOCRResult: String? = nil  // OCR extracted text
+    @State private var isPerformingOCR: Bool = false  // OCR in progress
+    @State private var previewScrollOffset: CGFloat = 0  // Scroll position
+    @State private var showCopiedFeedback: Bool = false  // Copy feedback indicator
     @FocusState private var isSearchFocused: Bool  // SEARCH mode when true, NORMAL when false
     
     // Tag Manager state
@@ -52,11 +56,9 @@ struct PopupWindowView: View {
     @State private var isLoadingPreview: Bool = false
     @State private var previewItemId: UUID? = nil
     
+    // Help panel for showing keyboard shortcuts
     @State private var isHelpPanelOpen: Bool = false
     @State private var helpScrollIndex: Int = 0
-    
-    // Scroll state for preview overlay
-    @StateObject private var previewScrollState = PreviewScrollState()
     
     @Environment(\.colorScheme) private var colorScheme
     
@@ -278,6 +280,11 @@ struct PopupWindowView: View {
                 commandModeOverlay
             }
             
+            // Help panel overlay
+            if isHelpPanelOpen {
+                helpPanelOverlay
+            }
+            
             // Type filter mode overlay
             if isTypeFilterMode {
                 typeFilterOverlay
@@ -286,11 +293,6 @@ struct PopupWindowView: View {
             // Preview mode overlay
             if isPreviewMode, let item = previewingItem {
                 previewOverlay(for: item)
-            }
-            
-            // Help panel overlay (must be last to appear on top)
-            if isHelpPanelOpen {
-                helpPanelOverlay
             }
             
             // Tag association popup overlay
@@ -507,8 +509,13 @@ struct PopupWindowView: View {
     }
     
     private var currentContextName: String {
-        if isPreviewMode {
-            return "PREVIEW"
+        if isPreviewMode, let item = previewingItem {
+            switch item.content {
+            case .image: return "IMAGE PREVIEW"
+            case .text: return "TEXT PREVIEW"
+            case .richText: return "TEXT PREVIEW"
+            case .fileURL: return "FILE PREVIEW"
+            }
         } else if isTagPanelOpen && isTagPanelFocused {
             return "TAG PANEL"
         } else if isTagPanelOpen && !isTagPanelFocused {
@@ -533,16 +540,35 @@ struct PopupWindowView: View {
     private var currentContextShortcuts: [ShortcutInfo] {
         let kb = keyBindingManager
         
-        if isPreviewMode {
-            return [
-                ShortcutInfo(key: kb.binding(for: .moveDown).displayString + " / j", description: "Scroll down"),
-                ShortcutInfo(key: kb.binding(for: .moveUp).displayString + " / k", description: "Scroll up"),
-                ShortcutInfo(key: kb.binding(for: .pageDown).displayString, description: "Page down"),
-                ShortcutInfo(key: kb.binding(for: .pageUp).displayString, description: "Page up"),
-                ShortcutInfo(key: kb.binding(for: .secondaryAction).displayString, description: "Open / OCR Trigger"),
-                ShortcutInfo(key: "c", description: "Copy OCR Result"),
-                ShortcutInfo(key: kb.binding(for: .escape).displayString + " / v", description: "Close preview"),
-            ]
+        // Preview mode shortcuts
+        if isPreviewMode, let item = previewingItem {
+            switch item.content {
+            case .image:
+                return [
+                    ShortcutInfo(key: kb.binding(for: .previewOCR).displayString, description: "Extract text (OCR)"),
+                    ShortcutInfo(key: kb.binding(for: .previewCopy).displayString, description: "Copy OCR result"),
+                    ShortcutInfo(key: kb.binding(for: .previewOpenExternal).displayString, description: "Open in external app"),
+                    ShortcutInfo(key: kb.binding(for: .escape).displayString + " / v", description: "Close preview"),
+                    ShortcutInfo(key: "?", description: "Show this help"),
+                ]
+            case .text, .richText:
+                return [
+                    ShortcutInfo(key: kb.binding(for: .previewScrollDown).displayString, description: "Scroll down"),
+                    ShortcutInfo(key: kb.binding(for: .previewScrollUp).displayString, description: "Scroll up"),
+                    ShortcutInfo(key: kb.binding(for: .previewHalfPageDown).displayString, description: "Half page down"),
+                    ShortcutInfo(key: kb.binding(for: .previewHalfPageUp).displayString, description: "Half page up"),
+                    ShortcutInfo(key: kb.binding(for: .previewCopy).displayString, description: "Copy content"),
+                    ShortcutInfo(key: kb.binding(for: .previewOpenExternal).displayString, description: "Open in external app"),
+                    ShortcutInfo(key: kb.binding(for: .escape).displayString + " / v", description: "Close preview"),
+                    ShortcutInfo(key: "?", description: "Show this help"),
+                ]
+            case .fileURL:
+                return [
+                    ShortcutInfo(key: kb.binding(for: .previewOpenExternal).displayString, description: "Open in Finder"),
+                    ShortcutInfo(key: kb.binding(for: .escape).displayString + " / v", description: "Close preview"),
+                    ShortcutInfo(key: "?", description: "Show this help"),
+                ]
+            }
         } else if isTagPanelOpen && isTagPanelFocused {
             return [
                 ShortcutInfo(key: "j / ↓", description: "Move down"),
@@ -888,38 +914,77 @@ struct PopupWindowView: View {
         
         // Preview mode handling
         if isPreviewMode {
-            if let command = KeyBindingManager.shared.resolveCommand(for: event) {
-                switch command {
-                case .escape, .quickPreview:
-                    exitPreviewMode()
-                    return true
-                case .pageUp:
-                    previewScrollState.scroll(.pageUp)
-                    return true
-                case .pageDown:
-                    previewScrollState.scroll(.pageDown)
-                    return true
-                case .moveUp:
-                    previewScrollState.scroll(.lineUp)
-                    return true
-                case .moveDown:
-                    previewScrollState.scroll(.lineDown)
-                    return true
-                case .secondaryAction:
-                     if let item = previewingItem {
-                         if case .fileURL(let path) = item.content {
-                             QuickLookController.shared.showPreview(for: path)
-                             return true
-                         }
-                         openInExternalApp(item)
-                         exitPreviewMode()
-                         return true
-                     }
-                default: break
+            let kb = keyBindingManager
+            
+            // ESC or v to close
+            if keyCode == 53 || keyCode == 9 {
+                exitPreviewMode()
+                return true
+            }
+            
+            // ? to open help (shift + /)
+            if keyCode == 44 && event.modifierFlags.contains(.shift) {
+                isHelpPanelOpen = true
+                return true
+            }
+            
+            // Handle based on content type
+            if let item = previewingItem {
+                switch item.content {
+                case .image:
+                    // o for OCR (not open external for images)
+                    if kb.matches(event, command: .previewOCR) && !isPerformingOCR {
+                        performPreviewOCR(for: item)
+                        return true
+                    }
+                    // ⌘C to copy OCR result
+                    if kb.matches(event, command: .previewCopy) {
+                        copyPreviewContent()
+                        return true
+                    }
+                    
+                case .text, .richText:
+                    // j/k for scrolling
+                    if kb.matches(event, command: .previewScrollDown) {
+                        scrollPreview(by: 40)
+                        return true
+                    }
+                    if kb.matches(event, command: .previewScrollUp) {
+                        scrollPreview(by: -40)
+                        return true
+                    }
+                    // ⌃D/⌃U for half-page scroll
+                    if kb.matches(event, command: .previewHalfPageDown) {
+                        scrollPreview(by: 200)
+                        return true
+                    }
+                    if kb.matches(event, command: .previewHalfPageUp) {
+                        scrollPreview(by: -200)
+                        return true
+                    }
+                    // ⌘C to copy content
+                    if kb.matches(event, command: .previewCopy) {
+                        copyPreviewContent()
+                        return true
+                    }
+                    // o to open in external app
+                    if kb.matches(event, command: .previewOpenExternal) {
+                        openInExternalApp(item)
+                        exitPreviewMode()
+                        return true
+                    }
+                    
+                case .fileURL:
+                    // o to open in Finder
+                    if kb.matches(event, command: .previewOpenExternal) {
+                        openInExternalApp(item)
+                        exitPreviewMode()
+                        return true
+                    }
                 }
             }
-            // Block other keys in preview mode
-            return true
+            
+            return true  // Consume all keys in preview mode
         }
         
         // Type filter mode handling
@@ -1227,8 +1292,9 @@ struct PopupWindowView: View {
             AppDelegate.shared?.closePopup()
             return true
             
-        case .pageUp, .pageDown, .secondaryAction:
-            // These are preview-only commands, not used in main view
+        // Preview mode commands - handled elsewhere, just return false here
+        case .previewOCR, .previewCopy, .previewScrollUp, .previewScrollDown,
+             .previewHalfPageUp, .previewHalfPageDown, .previewOpenExternal:
             return false
         }
         
@@ -1556,6 +1622,66 @@ struct PopupWindowView: View {
     private func exitPreviewMode() {
         isPreviewMode = false
         previewingItem = nil
+        previewOCRResult = nil
+        isPerformingOCR = false
+        previewScrollOffset = 0
+    }
+    
+    private func performPreviewOCR(for item: ClipboardItem) {
+        guard case .image(let data) = item.content else { return }
+        
+        isPerformingOCR = true
+        previewOCRResult = nil
+        
+        Task {
+            do {
+                let text = try await OCRService.shared.recognizeText(from: data)
+                await MainActor.run {
+                    previewOCRResult = text
+                    isPerformingOCR = false
+                }
+            } catch {
+                await MainActor.run {
+                    previewOCRResult = "OCR failed: \(error.localizedDescription)"
+                    isPerformingOCR = false
+                }
+            }
+        }
+    }
+    
+    private func copyPreviewContent() {
+        guard let item = previewingItem else { return }
+        
+        var textToCopy: String? = nil
+        
+        switch item.content {
+        case .image:
+            // Copy OCR result if available
+            textToCopy = previewOCRResult
+        case .text(let text):
+            textToCopy = text
+        case .richText(let data):
+            if let attrString = NSAttributedString(rtf: data, documentAttributes: nil) {
+                textToCopy = attrString.string
+            }
+        case .fileURL(let path):
+            textToCopy = path
+        }
+        
+        if let text = textToCopy, !text.isEmpty {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            
+            // Show feedback
+            showCopiedFeedback = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                showCopiedFeedback = false
+            }
+        }
+    }
+    
+    private func scrollPreview(by amount: CGFloat) {
+        previewScrollOffset += amount
     }
     
     private func openInExternalApp(_ item: ClipboardItem) {
@@ -1621,7 +1747,7 @@ struct PopupWindowView: View {
                     }
                     .buttonStyle(.plain)
                     
-                    Text("ESC / v to close")
+                    Text("? for shortcuts")
                         .font(.system(size: 11))
                         .foregroundColor(theme.secondaryText)
                         .padding(.leading, 8)
@@ -1633,15 +1759,75 @@ struct PopupWindowView: View {
                 Divider()
                 
                 // Content with ScrollView for large content
-                ScrollView {
-                    previewContent(for: item)
-                        .padding(16)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        previewContent(for: item)
+                            .padding(16)
+                            .id("previewContent")
+                    }
+                    .onChange(of: previewScrollOffset) { _ in
+                        // Scroll animation handled by SwiftUI
+                    }
+                }
+                
+                // OCR status bar for images
+                if case .image = item.content {
+                    Divider()
+                    HStack {
+                        if isPerformingOCR {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                            Text("Extracting text...")
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.secondaryText)
+                        } else if let ocrResult = previewOCRResult {
+                            Image(systemName: "doc.text")
+                                .foregroundColor(theme.accent)
+                            Text("OCR: \(ocrResult.prefix(50))...")
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.text)
+                                .lineLimit(1)
+                            Spacer()
+                            Text("⌘C to copy")
+                                .font(.system(size: 10))
+                                .foregroundColor(theme.secondaryText)
+                        } else {
+                            Text("Press 'o' to extract text (OCR)")
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.secondaryText)
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(theme.tertiaryBackground)
                 }
             }
             .frame(width: previewWidth(for: item), height: previewHeight(for: item))
             .background(theme.secondaryBackground)
             .cornerRadius(12)
             .shadow(color: .black.opacity(0.3), radius: 20)
+            
+            // Copied feedback overlay
+            if showCopiedFeedback {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("Copied!")
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Color.black.opacity(0.8))
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                    .padding(.bottom, 50)
+                }
+                .transition(.opacity.combined(with: .scale))
+                .animation(.easeOut(duration: 0.2), value: showCopiedFeedback)
+            }
         }
     }
     
@@ -1704,7 +1890,7 @@ struct PopupWindowView: View {
                 if SyntaxHighlighter.shared.isLikelyCode(text),
                    let highlighted = SyntaxHighlighter.shared.highlight(text) {
                     Text(AttributedString(highlighted))
-                        .font(.custom("Menlo", size: 12))
+                        .font(.custom("Menlo", size: 12)) // Ensure monospaced font
                         .textSelection(.enabled)
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1764,21 +1950,21 @@ struct PopupWindowView: View {
             
         case .richText(let data):
             if let attrString = NSAttributedString(rtf: data, documentAttributes: nil) {
-                // Check if it's code that needs highlighting
-                if SyntaxHighlighter.shared.isLikelyCode(attrString.string),
-                   let highlighted = SyntaxHighlighter.shared.highlight(attrString.string) {
-                    Text(AttributedString(highlighted))
-                        .font(.custom("Menlo", size: 12))
-                        .textSelection(.enabled)
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(red: 0.15, green: 0.16, blue: 0.18))
-                        .cornerRadius(4)
-                } else {
-                    Text(AttributedString(attrString))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                // Helper to render content
+                Group {
+                    if SyntaxHighlighter.shared.isLikelyCode(attrString.string),
+                       let highlighted = SyntaxHighlighter.shared.highlight(attrString.string) {
+                        Text(AttributedString(highlighted))
+                            .font(.custom("Menlo", size: 12))
+                            .padding(8)
+                            .background(Color(red: 0.15, green: 0.16, blue: 0.18))
+                            .cornerRadius(4)
+                    } else {
+                        Text(AttributedString(attrString))
+                    }
                 }
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 Text("Unable to load rich text")
                     .foregroundColor(theme.secondaryText)
@@ -2697,92 +2883,4 @@ struct FlowLayout: Layout {
 
 #Preview {
     PopupWindowView()
-}
-
-// MARK: - Preview Components
-
-class PreviewScrollState: ObservableObject {
-    enum Action {
-        case lineUp, lineDown, pageUp, pageDown
-        case top, bottom
-    }
-    @Published var action: Action?
-    
-    func scroll(_ action: Action) {
-        self.action = action
-    }
-}
-
-struct PreviewTextView: NSViewRepresentable {
-    let attributedText: NSAttributedString
-    @ObservedObject var scrollState: PreviewScrollState
-    
-    func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
-        scrollView.hasVerticalScroller = true
-        scrollView.drawsBackground = false
-        scrollView.borderType = .noBorder
-        
-        let textView = NSTextView()
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.drawsBackground = true
-        textView.backgroundColor = .clear
-        textView.textContainer?.widthTracksTextView = true
-        textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
-        textView.textContainerInset = NSSize(width: 10, height: 10)
-        
-        scrollView.documentView = textView
-        return scrollView
-    }
-    
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? NSTextView else { return }
-        
-        // Update content if changed
-        if textView.textStorage?.string != attributedText.string {
-            textView.textStorage?.setAttributedString(attributedText)
-        }
-        
-        // Handle scrolling
-        if let action = scrollState.action {
-            let clipView = scrollView.contentView
-            var newOrigin = clipView.bounds.origin
-            let currentHeight = clipView.bounds.height
-            
-            switch action {
-            case .lineUp:
-                newOrigin.y -= 40
-            case .lineDown:
-                newOrigin.y += 40
-            case .pageUp:
-                newOrigin.y -= currentHeight / 2
-            case .pageDown:
-                newOrigin.y += currentHeight / 2
-            case .top:
-                newOrigin.y = 0
-            case .bottom:
-                if let docView = scrollView.documentView {
-                    newOrigin.y = docView.bounds.height
-                }
-            }
-            
-            // Clamp
-            if let docView = scrollView.documentView {
-                let maxY = max(0, docView.bounds.height - currentHeight)
-                newOrigin.y = max(0, min(newOrigin.y, maxY))
-            }
-            
-            NSAnimationContext.beginGrouping()
-            NSAnimationContext.current.duration = 0.1
-            clipView.animator().setBoundsOrigin(newOrigin)
-            NSAnimationContext.endGrouping()
-            
-            scrollView.reflectScrolledClipView(clipView)
-            
-            DispatchQueue.main.async {
-                scrollState.action = nil
-            }
-        }
-    }
 }

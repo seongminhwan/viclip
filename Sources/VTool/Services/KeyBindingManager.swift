@@ -22,9 +22,15 @@ class KeyBindingManager: ObservableObject {
         case position = "Locate in Timeline"
         case addToQueue = "Add to Paste Queue"
         case escape = "Exit / Cancel"
-        case pageUp = "Page Up"
-        case pageDown = "Page Down"
-        case secondaryAction = "Open / OCR"
+        
+        // Preview mode commands
+        case previewOCR = "OCR Extract Text"
+        case previewCopy = "Copy Content"
+        case previewScrollUp = "Scroll Up"
+        case previewScrollDown = "Scroll Down"
+        case previewHalfPageUp = "Half Page Up"
+        case previewHalfPageDown = "Half Page Down"
+        case previewOpenExternal = "Open External"
         
         var id: String { rawValue }
         
@@ -45,9 +51,15 @@ class KeyBindingManager: ObservableObject {
             case .position: return KeyBinding(key: "p", keyCode: 35, requiresShift: false)
             case .addToQueue: return KeyBinding(key: "q", keyCode: 12, requiresShift: false)
             case .escape: return KeyBinding(key: "⎋", keyCode: 53, requiresShift: false)
-            case .pageUp: return KeyBinding(key: "⌃u", keyCode: 32, requiresShift: false, requiresControl: true)
-            case .pageDown: return KeyBinding(key: "⌃d", keyCode: 2, requiresShift: false, requiresControl: true)
-            case .secondaryAction: return KeyBinding(key: "o", keyCode: 31, requiresShift: false)
+            
+            // Preview mode bindings
+            case .previewOCR: return KeyBinding(key: "o", keyCode: 31, requiresShift: false)
+            case .previewCopy: return KeyBinding(key: "⌘C", keyCode: 8, requiresShift: false, requiresCommand: true)
+            case .previewScrollUp: return KeyBinding(key: "k", keyCode: 40, requiresShift: false)
+            case .previewScrollDown: return KeyBinding(key: "j", keyCode: 38, requiresShift: false)
+            case .previewHalfPageUp: return KeyBinding(key: "⌃U", keyCode: 32, requiresShift: false, requiresControl: true)
+            case .previewHalfPageDown: return KeyBinding(key: "⌃D", keyCode: 2, requiresShift: false, requiresControl: true)
+            case .previewOpenExternal: return KeyBinding(key: "o", keyCode: 31, requiresShift: false)
             }
         }
     }
@@ -109,6 +121,11 @@ class KeyBindingManager: ObservableObject {
     
     func binding(for command: Command) -> KeyBinding {
         bindings[command] ?? command.defaultBinding
+    }
+    
+    /// Check if an event matches the binding for a command
+    func matches(_ event: NSEvent, command: Command) -> Bool {
+        return binding(for: command).matches(event: event)
     }
     
     /// Check if a binding conflicts with any existing binding
@@ -206,24 +223,6 @@ class KeyBindingManager: ObservableObject {
             return nil
         }
         return num
-    }
-    
-    // Helper to resolve command from event without executing it
-    func resolveCommand(for event: NSEvent) -> Command? {
-        // Check custom bindings first
-        for (command, binding) in bindings {
-            if binding.matches(event: event) {
-                return command
-            }
-        }
-        
-        // Check default bindings for commands that don't have custom bindings
-        for cmd in Command.allCases {
-             if bindings[cmd] == nil && cmd.defaultBinding.matches(event: event) {
-                 return cmd
-             }
-        }
-        return nil
     }
     
     // MARK: - Persistence

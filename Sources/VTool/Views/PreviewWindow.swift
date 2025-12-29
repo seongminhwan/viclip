@@ -6,8 +6,6 @@ private var kImageDataKey: UInt8 = 0
 private var kResultViewKey: UInt8 = 0
 private var kTextViewKey: UInt8 = 0
 private var kCopyButtonKey: UInt8 = 0
-private var kMainScrollViewKey: UInt8 = 0
-private var kOCRButtonKey: UInt8 = 0
 
 // MARK: - Preview Window Controller
 class PreviewWindowController: NSObject, NSWindowDelegate {
@@ -53,142 +51,18 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
         panel?.makeKeyAndOrderFront(nil)
         
         // Handle ESC/v key to close - store the monitor
-        // Handle ESC/v key to close - store the monitor
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            return self?.handleEvent(event, for: item)
-        }
-    }
-    
-    // MARK: - Event Handling
-    
-    private func handleEvent(_ event: NSEvent, for item: ClipboardItem) -> NSEvent? {
-        // Resolve command from KeyBindingManager
-        var command: KeyBindingManager.Command?
-        
-        // Check bindings
-        for (cmd, binding) in KeyBindingManager.shared.bindings {
-            if binding.matches(event: event) {
-                command = cmd
-                break
+            if event.keyCode == 53 || event.keyCode == 9 { // ESC or v
+                self?.close()
+                return nil
             }
-        }
-        
-        // Fallback to defaults if needed (though bindings usually populated)
-        if command == nil {
-             for cmd in KeyBindingManager.Command.allCases {
-                 if cmd.defaultBinding.matches(event: event) {
-                     command = cmd
-                     break
-                 }
-             }
-        }
-        
-        if let cmd = command {
-            switch cmd {
-            case .escape, .quickPreview:
-                close()
+            // o to open in external app
+            if event.keyCode == 31 {
+                self?.openInExternalApp(item)
                 return nil
-                
-            case .secondaryAction: // o
-                if triggerSecondaryAction(for: item) { return nil }
-                
-            case .pageUp:
-                scroll(amount: -0.5, isPage: true)
-                return nil
-                
-            case .pageDown:
-                scroll(amount: 0.5, isPage: true)
-                return nil
-                
-            case .moveUp:
-                scroll(amount: -40, isPage: false)
-                return nil
-                
-            case .moveDown:
-                scroll(amount: 40, isPage: false)
-                return nil
-                
-            default: break
             }
+            return event
         }
-        
-        // Handle 'c' for copy OCR result
-        if event.keyCode == 8 && !event.modifierFlags.contains(.command) {
-             if copyOCRContent() { return nil }
-        }
-        
-        return event
-    }
-    
-    private func triggerSecondaryAction(for item: ClipboardItem) -> Bool {
-        switch item.content {
-        case .image:
-            // Trigger OCR
-            if let container = panel?.contentView,
-               let btn = objc_getAssociatedObject(container, &kOCRButtonKey) as? NSButton {
-                btn.performClick(nil)
-                return true
-            }
-            
-        case .fileURL(let path):
-            // Open System Preview (QuickLook)
-            QuickLookController.shared.showPreview(for: path)
-            return true
-            
-        default:
-            // Default "o" behavior: Open in external app
-            openInExternalApp(item)
-            return true
-        }
-        return false
-    }
-    
-    private func copyOCRContent() -> Bool {
-        guard let container = panel?.contentView,
-              let resultView = objc_getAssociatedObject(container, &kResultViewKey) as? NSScrollView,
-              !resultView.isHidden,
-              let textView = resultView.documentView as? NSTextView,
-              !textView.string.isEmpty else { return false }
-        
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(textView.string, forType: .string)
-        
-        showToast(message: "OCR Copied! ✅")
-        return true
-    }
-    
-    private func showToast(message: String) {
-        guard let container = panel?.contentView,
-              let btn = objc_getAssociatedObject(container, &kCopyButtonKey) as? NSButton else { return }
-        
-        let originalTitle = btn.title
-        btn.title = message
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            btn.title = originalTitle
-        }
-    }
-    
-    private func scroll(amount: CGFloat, isPage: Bool) {
-        guard let container = panel?.contentView,
-              let scrollView = objc_getAssociatedObject(container, &kMainScrollViewKey) as? NSScrollView else { return }
-        
-        let clipView = scrollView.contentView
-        var newOrigin = clipView.bounds.origin
-        let currentHeight = clipView.bounds.height
-        
-        let delta = isPage ? currentHeight * amount : amount
-        
-        newOrigin.y += delta
-        
-        // Clamp
-        if let docView = scrollView.documentView {
-             let maxY = max(0, docView.bounds.height - currentHeight)
-             newOrigin.y = max(0, min(newOrigin.y, maxY))
-        }
-        
-        clipView.animator().setBoundsOrigin(newOrigin)
-        scrollView.reflectScrolledClipView(clipView)
     }
     
     func close() {
@@ -382,9 +256,6 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
                     mainStack.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -10),
                     mainStack.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -10)
                 ])
-                
-                // Store OCR button reference on container view for keyboard access
-                objc_setAssociatedObject(containerView, &kOCRButtonKey, ocrButton, .OBJC_ASSOCIATION_RETAIN)
             }
             
         case .text(let text):
@@ -420,9 +291,6 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
                 scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
                 scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
             ])
-            
-            // Store scroll view for keyboard access
-            objc_setAssociatedObject(containerView, &kMainScrollViewKey, scrollView, .OBJC_ASSOCIATION_RETAIN)
             
         case .fileURL(let path):
             let stackView = NSStackView()
@@ -490,9 +358,6 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
                 scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
                 scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
             ])
-            
-            // Store scroll view for keyboard access
-            objc_setAssociatedObject(containerView, &kMainScrollViewKey, scrollView, .OBJC_ASSOCIATION_RETAIN)
         }
         
         return containerView
