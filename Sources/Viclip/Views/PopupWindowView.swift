@@ -1282,9 +1282,9 @@ struct PopupWindowView: View {
                         clipboardMonitor.togglePin(item: item)
                         loadPinnedItems()
                         
-                        // Move selection +2: +1 for new pinned item, +1 for next history item
-                        // Clamp to countBefore (which matches the max valid index of the new list size N+1)
-                        selectedIndex = min(selectedIndex + 2, countBefore)
+                        // Move selection +1: +1 for new pinned item at top
+                        // This keeps the selection on the SAME item (which is now shifted down by 1)
+                        selectedIndex = min(selectedIndex + 1, countBefore)
                     }
                 }
                 return true

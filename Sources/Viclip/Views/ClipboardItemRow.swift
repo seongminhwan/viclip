@@ -16,7 +16,13 @@ struct ClipboardItemRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // Quick select number (1-9)
-            if index < 9 {
+            // Quick select number (1-9) or Pin indicator
+            if item.isPinnedItem || item.isDirectPinned {
+                Image(systemName: "pin.fill")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                    .frame(width: 16)
+            } else if index < 9 {
                 Text("\(index + 1)")
                     .font(.system(.caption, design: .monospaced))
                     .foregroundColor(.secondary)
