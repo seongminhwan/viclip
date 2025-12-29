@@ -46,9 +46,15 @@ for bundle in "$BUILD_DIR"/*.bundle; do
     fi
 done
 
-# Perform Ad-Hoc signing (fix for GitHub Actions builds loading resources)
-echo "🔏 Signing app (ad-hoc)..."
-codesign --force --deep --sign - "$APP_BUNDLE"
+# Perform Ad-Hoc signing with entitlements (fix for JSContext JIT crash)
+echo "🔏 Signing app (ad-hoc with entitlements)..."
+entitlements_path="Sources/Viclip/Resources/Viclip.entitlements"
+if [ -f "$entitlements_path" ]; then
+    codesign --force --deep --sign - --entitlements "$entitlements_path" "$APP_BUNDLE"
+else
+    echo "⚠️ Entitlements file not found, signing without them."
+    codesign --force --deep --sign - "$APP_BUNDLE"
+fi
 
 
 # Create Info.plist
