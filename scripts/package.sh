@@ -19,11 +19,25 @@ mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 # Copy executable
+# Clean build directory to ensure flags take effect
+rm -rf "$BUILD_DIR"
+rm -rf .build/arm64-apple-macosx/release
+
+# Build with privacy flags (remap absolute paths)
+echo "🔨 Building Release (Privacy Mode)..."
+swift build -c release \
+    -Xswiftc -debug-prefix-map -Xswiftc $(pwd)=. \
+    -Xswiftc -debug-prefix-map -Xswiftc $(pwd)/.build/checkouts=.build/checkouts
+
+# Copy executable
 if [ -f "$BUILD_DIR/$APP_NAME" ]; then
     cp "$BUILD_DIR/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/"
+    
+    # Strip local symbols to remove remaining paths
+    echo "🧹 Stripping symbols for privacy..."
+    strip -r -S "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 else
     echo "❌ Error: Executable not found at $BUILD_DIR/$APP_NAME"
-    echo "   Run 'swift build -c release' first"
     exit 1
 fi
 
@@ -115,4 +129,31 @@ fi
 echo "✅ App bundle created at: $APP_BUNDLE"
 echo "   Contents:"
 ls -la "$APP_BUNDLE/Contents/Resources/" | head -20
-echo "   To run: open $APP_BUNDLE"
+
+# Create DMG
+echo "💿 Creating DMG..."
+DMG_NAME="$APP_NAME.dmg"
+DMG_PATH="$DIST_DIR/$DMG_NAME"
+TMP_DMG_DIR="$DIST_DIR/dmg_tmp"
+
+# Clean up previous DMG and temp dir
+rm -f "$DMG_PATH"
+rm -rf "$TMP_DMG_DIR"
+
+# Create temp dir for DMG content
+mkdir -p "$TMP_DMG_DIR"
+
+# Copy App to temp dir
+cp -R "$APP_BUNDLE" "$TMP_DMG_DIR/"
+
+# Create /Applications symlink
+ln -s /Applications "$TMP_DMG_DIR/Applications"
+
+# Create DMG using hdiutil
+hdiutil create -volname "$APP_NAME" -srcfolder "$TMP_DMG_DIR" -ov -format UDZO "$DMG_PATH"
+
+# Clean up temp dir
+rm -rf "$TMP_DMG_DIR"
+
+echo "✅ DMG created at: $DMG_PATH"
+echo "   To open: open $DMG_PATH"

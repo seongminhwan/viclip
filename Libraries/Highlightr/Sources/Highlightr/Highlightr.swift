@@ -8,6 +8,7 @@
 
 import Foundation
 import JavaScriptCore
+import os.log
 
 #if os(OSX)
     import AppKit
@@ -32,8 +33,10 @@ open class Highlightr
     open var ignoreIllegals = false
 
     private let hljs: JSValue
-
     private let bundle : Bundle
+    
+    /// Logger for debugging bundle resolution issues
+    private static let logger = Logger(subsystem: "com.viclip.highlightr", category: "BundleResolution")
     private let htmlStart = "<"
     private let spanStart = "span class=\""
     private let spanStartClose = "\">"
@@ -49,31 +52,50 @@ open class Highlightr
      */
     public init?(highlightPath: String? = nil)
     {
-        guard let jsContext = JSContext() else { return nil }
+        Self.logger.info("Highlightr init starting...")
+        
+        guard let jsContext = JSContext() else {
+            Self.logger.error("Failed to create JSContext")
+            return nil
+        }
         let window = JSValue(newObjectIn: jsContext)
 
-        #if SWIFT_PACKAGE
-        let bundle = Bundle.module
-        #else
-        let bundle = Bundle(for: Highlightr.self)
-        #endif
-        self.bundle = bundle
-        guard let hgPath = highlightPath ?? bundle.path(forResource: "highlight.min", ofType: "js") else
+        // Use multi-strategy bundle resolution for packaged apps
+        guard let resolvedBundle = Self.findResourceBundle() else {
+            Self.logger.error("Failed to find resource bundle - all strategies failed")
+            return nil
+        }
+        self.bundle = resolvedBundle
+        
+        Self.logger.info("Using bundle at path: \(resolvedBundle.bundlePath, privacy: .public)")
+        
+        guard let hgPath = highlightPath ?? resolvedBundle.path(forResource: "highlight.min", ofType: "js") else
         {
+            Self.logger.error("highlight.min.js not found in bundle")
             return nil
         }
         
-        guard let hgJs = try? String.init(contentsOfFile: hgPath) else { return nil }
+        Self.logger.info("Found highlight.min.js at: \(hgPath, privacy: .public)")
+        
+        guard let hgJs = try? String.init(contentsOfFile: hgPath) else {
+            Self.logger.error("Failed to read highlight.min.js contents")
+            return nil
+        }
         let value = jsContext.evaluateScript(hgJs)
-        guard let hljs = jsContext.objectForKeyedSubscript("hljs") else { return nil }
+        guard let hljs = jsContext.objectForKeyedSubscript("hljs") else {
+            Self.logger.error("Failed to get hljs object from JSContext")
+            return nil
+        }
 
         self.hljs = hljs
         
         guard setTheme(to: "pojoaque") else
         {
+            Self.logger.error("Failed to set initial theme")
             return nil
         }
         
+        Self.logger.info("Highlightr initialized successfully")
     }
     
     /**
@@ -190,6 +212,94 @@ open class Highlightr
         {
             DispatchQueue.main.sync { block() }
         }
+    }
+    
+    /**
+     Find the resource bundle using multiple strategies for packaged apps.
+     This handles both SwiftPM development and packaged .app bundle scenarios.
+     */
+    private static func findResourceBundle() -> Bundle? {
+        logger.info("Starting bundle resolution...")
+        logger.info("Main bundle path: \(Bundle.main.bundlePath, privacy: .public)")
+        logger.info("Main executable path: \(Bundle.main.executablePath ?? "nil", privacy: .public)")
+        
+        // Strategy 1: Try Bundle.module (works in SwiftPM development)
+        #if SWIFT_PACKAGE
+        logger.info("Strategy 1: Trying Bundle.module (SWIFT_PACKAGE is defined)")
+        let moduleBundle = Bundle.module
+        logger.info("Bundle.module path: \(moduleBundle.bundlePath, privacy: .public)")
+        if moduleBundle.path(forResource: "highlight.min", ofType: "js") != nil {
+            logger.info("Strategy 1 SUCCESS: Found resources in Bundle.module")
+            return moduleBundle
+        } else {
+            logger.warning("Strategy 1 FAILED: highlight.min.js not found in Bundle.module")
+        }
+        #else
+        logger.info("Strategy 1: SWIFT_PACKAGE not defined, skipping Bundle.module")
+        #endif
+        
+        // Strategy 2: Look for bundle in main app's resources (packaged app)
+        logger.info("Strategy 2: Looking for Highlightr_Highlightr.bundle in main app resources")
+        if let bundlePath = Bundle.main.path(forResource: "Highlightr_Highlightr", ofType: "bundle") {
+            logger.info("Found bundle at: \(bundlePath, privacy: .public)")
+            if let bundle = Bundle(path: bundlePath) {
+                if bundle.path(forResource: "highlight.min", ofType: "js") != nil {
+                    logger.info("Strategy 2 SUCCESS: Found resources in Highlightr_Highlightr.bundle")
+                    return bundle
+                } else {
+                    logger.warning("Strategy 2 FAILED: Bundle found but highlight.min.js missing")
+                }
+            } else {
+                logger.warning("Strategy 2 FAILED: Could not create Bundle from path")
+            }
+        } else {
+            logger.warning("Strategy 2 FAILED: Highlightr_Highlightr.bundle not found in main resources")
+        }
+        
+        // Strategy 3: Try finding bundle relative to executable
+        logger.info("Strategy 3: Looking for bundle relative to executable")
+        if let execPath = Bundle.main.executablePath {
+            let resourcePath = (execPath as NSString)
+                .deletingLastPathComponent
+                .appending("/../Resources/Highlightr_Highlightr.bundle")
+            logger.info("Trying path: \(resourcePath, privacy: .public)")
+            if let bundle = Bundle(path: resourcePath) {
+                if bundle.path(forResource: "highlight.min", ofType: "js") != nil {
+                    logger.info("Strategy 3 SUCCESS: Found resources in relative bundle path")
+                    return bundle
+                } else {
+                    logger.warning("Strategy 3 FAILED: Bundle found but highlight.min.js missing")
+                }
+            } else {
+                logger.warning("Strategy 3 FAILED: Could not create Bundle from path")
+            }
+        } else {
+            logger.warning("Strategy 3 FAILED: No executable path available")
+        }
+        
+        // Strategy 4: Fallback to Bundle(for: Highlightr.self) for framework builds
+        logger.info("Strategy 4: Trying Bundle(for: Highlightr.self)")
+        let classBundle = Bundle(for: Highlightr.self)
+        logger.info("Class bundle path: \(classBundle.bundlePath, privacy: .public)")
+        if classBundle.path(forResource: "highlight.min", ofType: "js") != nil {
+            logger.info("Strategy 4 SUCCESS: Found resources in class bundle")
+            return classBundle
+        } else {
+            logger.warning("Strategy 4 FAILED: highlight.min.js not found in class bundle")
+        }
+        
+        // List contents of Resources directory for debugging
+        logger.error("All strategies failed. Listing main bundle resources for debugging:")
+        if let resourcePath = Bundle.main.resourcePath {
+            logger.info("Resource path: \(resourcePath, privacy: .public)")
+            if let contents = try? FileManager.default.contentsOfDirectory(atPath: resourcePath) {
+                for item in contents.prefix(20) {
+                    logger.info("  - \(item, privacy: .public)")
+                }
+            }
+        }
+        
+        return nil
     }
     
     private func processHTMLString(_ string: String) -> NSAttributedString?
