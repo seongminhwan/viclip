@@ -112,8 +112,8 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
             }
         }
         
-        // Handle Cmd+C for OCR
-        if event.keyCode == 8 && event.modifierFlags.contains(.command) {
+        // Handle 'c' for copy OCR result
+        if event.keyCode == 8 && !event.modifierFlags.contains(.command) {
              if copyOCRContent() { return nil }
         }
         

@@ -278,11 +278,6 @@ struct PopupWindowView: View {
                 commandModeOverlay
             }
             
-            // Help panel overlay
-            if isHelpPanelOpen {
-                helpPanelOverlay
-            }
-            
             // Type filter mode overlay
             if isTypeFilterMode {
                 typeFilterOverlay
@@ -291,6 +286,11 @@ struct PopupWindowView: View {
             // Preview mode overlay
             if isPreviewMode, let item = previewingItem {
                 previewOverlay(for: item)
+            }
+            
+            // Help panel overlay (must be last to appear on top)
+            if isHelpPanelOpen {
+                helpPanelOverlay
             }
             
             // Tag association popup overlay
@@ -540,7 +540,7 @@ struct PopupWindowView: View {
                 ShortcutInfo(key: kb.binding(for: .pageDown).displayString, description: "Page down"),
                 ShortcutInfo(key: kb.binding(for: .pageUp).displayString, description: "Page up"),
                 ShortcutInfo(key: kb.binding(for: .secondaryAction).displayString, description: "Open / OCR Trigger"),
-                ShortcutInfo(key: "⌘C", description: "Copy OCR Result"),
+                ShortcutInfo(key: "c", description: "Copy OCR Result"),
                 ShortcutInfo(key: kb.binding(for: .escape).displayString + " / v", description: "Close preview"),
             ]
         } else if isTagPanelOpen && isTagPanelFocused {
@@ -1701,21 +1701,21 @@ struct PopupWindowView: View {
                 }
                 
                 // Syntax highlighting for text
-                Group {
-                    if SyntaxHighlighter.shared.isLikelyCode(text),
-                       let highlighted = SyntaxHighlighter.shared.highlight(text) {
-                        PreviewTextView(attributedText: highlighted, scrollState: previewScrollState)
-                            .background(Color(red: 0.15, green: 0.16, blue: 0.18))
-                    } else {
-                        let attrStr = NSAttributedString(string: text, attributes: [
-                            .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular),
-                            .foregroundColor: NSColor.textColor
-                        ])
-                        PreviewTextView(attributedText: attrStr, scrollState: previewScrollState)
-                    }
+                if SyntaxHighlighter.shared.isLikelyCode(text),
+                   let highlighted = SyntaxHighlighter.shared.highlight(text) {
+                    Text(AttributedString(highlighted))
+                        .font(.custom("Menlo", size: 12))
+                        .textSelection(.enabled)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(red: 0.15, green: 0.16, blue: 0.18))
+                        .cornerRadius(4)
+                } else {
+                    Text(text)
+                        .font(.system(size: 13, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .cornerRadius(4)
             }
             
         case .fileURL(let path):
@@ -1764,18 +1764,21 @@ struct PopupWindowView: View {
             
         case .richText(let data):
             if let attrString = NSAttributedString(rtf: data, documentAttributes: nil) {
-                // Helper to render content
-                Group {
-                    if SyntaxHighlighter.shared.isLikelyCode(attrString.string),
-                       let highlighted = SyntaxHighlighter.shared.highlight(attrString.string) {
-                        PreviewTextView(attributedText: highlighted, scrollState: previewScrollState)
-                            .background(Color(red: 0.15, green: 0.16, blue: 0.18))
-                    } else {
-                        PreviewTextView(attributedText: attrString, scrollState: previewScrollState)
-                    }
+                // Check if it's code that needs highlighting
+                if SyntaxHighlighter.shared.isLikelyCode(attrString.string),
+                   let highlighted = SyntaxHighlighter.shared.highlight(attrString.string) {
+                    Text(AttributedString(highlighted))
+                        .font(.custom("Menlo", size: 12))
+                        .textSelection(.enabled)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(red: 0.15, green: 0.16, blue: 0.18))
+                        .cornerRadius(4)
+                } else {
+                    Text(AttributedString(attrString))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .cornerRadius(4)
             } else {
                 Text("Unable to load rich text")
                     .foregroundColor(theme.secondaryText)
