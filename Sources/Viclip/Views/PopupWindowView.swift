@@ -691,7 +691,8 @@ struct PopupWindowView: View {
             return [
                 ShortcutInfo(key: "j / ↓", description: "Move down"),
                 ShortcutInfo(key: "k / ↑", description: "Move up"),
-                ShortcutInfo(key: "⇥", description: "Focus list (exit typing)"),
+                ShortcutInfo(key: "⏎ (1st)", description: "Exit search mode"),
+                ShortcutInfo(key: "⏎ (2nd)", description: "Paste selected"),
                 ShortcutInfo(key: "⌃P", description: "Locate item in history"),
                 ShortcutInfo(key: "⎋", description: "Exit search mode"),
             ]
@@ -704,14 +705,26 @@ struct PopupWindowView: View {
                 ShortcutInfo(key: kb.binding(for: .search).displayString, description: "Focus search"),
                 ShortcutInfo(key: kb.binding(for: .escape).displayString, description: "Close popup"),
             ]
+        } else if isGotoMode {
+            // GOTO mode shortcuts
+            return [
+                ShortcutInfo(key: "1-9, a-z", description: "Paste visible item"),
+                ShortcutInfo(key: "g", description: "Scroll to top"),
+                ShortcutInfo(key: "G", description: "Scroll to bottom"),
+                ShortcutInfo(key: "j / k", description: "Navigate up/down"),
+                ShortcutInfo(key: "⌃D / ⌃U", description: "Half page down/up"),
+                ShortcutInfo(key: "⎋", description: "Exit GOTO mode"),
+            ]
         } else {
             // NORMAL mode - use dynamic bindings from KeyBindingManager
             return [
                 ShortcutInfo(key: kb.binding(for: .moveDown).displayString + " / ↓", description: "Move down"),
                 ShortcutInfo(key: kb.binding(for: .moveUp).displayString + " / ↑", description: "Move up"),
+                ShortcutInfo(key: "⌃D / ⌃U", description: "Half page down/up"),
                 ShortcutInfo(key: kb.binding(for: .paste).displayString, description: "Paste selected item"),
-                ShortcutInfo(key: "1-9", description: "Quick paste by number"),
+                ShortcutInfo(key: "g", description: "Enter GOTO mode"),
                 ShortcutInfo(key: kb.binding(for: .search).displayString, description: "Search / Focus input"),
+                ShortcutInfo(key: "R", description: "Rename / set alias"),
                 ShortcutInfo(key: kb.binding(for: .favorite).displayString, description: "Toggle favorite"),
                 ShortcutInfo(key: kb.binding(for: .filterByType).displayString, description: "Filter by type"),
                 ShortcutInfo(key: "⇧P", description: "Toggle pin"),
