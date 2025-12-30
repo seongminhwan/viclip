@@ -1430,8 +1430,12 @@ struct PopupWindowView: View {
                 clipboardMonitor.loadFirstPage()
                 
                 // Find and select the original item after list reloads
+                // We must skip the pinned section to find the item in history
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    if let index = self.filteredItems.firstIndex(where: { $0.id == targetId }) {
+                    let pinnedCount = self.filteredPinnedItems.count
+                    let searchRange = pinnedCount..<self.filteredItems.count
+                    
+                    if let index = self.filteredItems[searchRange].firstIndex(where: { $0.originalId == targetId }) {
                         withAnimation(.interactiveSpring(response: 0.25, dampingFraction: 0.8)) {
                             self.selectedIndex = index
                         }
