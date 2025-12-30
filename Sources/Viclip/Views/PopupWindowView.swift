@@ -67,7 +67,7 @@ struct PopupWindowView: View {
     
     // Rename/alias state for inline editing
     @State private var isRenamingItem: Bool = false
-    @State private var renamingItemId: UUID? = nil
+    @State private var renamingItemId: String? = nil  // Using displayId for unique row identification
     @State private var editingItemAlias: String = ""
     @FocusState private var isRenameInputFocused: Bool
     
@@ -245,7 +245,17 @@ struct PopupWindowView: View {
     
     /// NORMAL mode means search is not focused - all VIM commands work
     private var isNormalMode: Bool {
-        !isSearchFocused && !isCommandMode
+        !isSearchFocused && 
+        !isCommandMode && 
+        !isRenamingItem && 
+        !isCreatingTag && 
+        !isRenamingTag && 
+        !isCreatingTagInPopup &&
+        !isTypeFilterMode &&
+        !isPreviewMode &&
+        !isHelpPanelOpen &&
+        !isTagAssociationPopupOpen &&
+        !isAdvancedFilterOpen
     }
     
     private var modeColor: Color {
@@ -713,6 +723,7 @@ struct PopupWindowView: View {
                 ShortcutInfo(key: "G", description: "Scroll to bottom"),
                 ShortcutInfo(key: "j / k", description: "Navigate up/down"),
                 ShortcutInfo(key: "⌃D / ⌃U", description: "Half page down/up"),
+                ShortcutInfo(key: "⌘D / ⌘U", description: "Scroll preview"),
                 ShortcutInfo(key: "⎋", description: "Exit GOTO mode"),
             ]
         } else {
@@ -722,6 +733,7 @@ struct PopupWindowView: View {
                 ShortcutInfo(key: kb.binding(for: .moveUp).displayString + " / ↑", description: "Move up"),
                 ShortcutInfo(key: "⌃D / ⌃U", description: "Half page down/up"),
                 ShortcutInfo(key: kb.binding(for: .paste).displayString, description: "Paste selected item"),
+                ShortcutInfo(key: "⌘⏎", description: "Paste as plain text"),
                 ShortcutInfo(key: "g", description: "Enter GOTO mode"),
                 ShortcutInfo(key: kb.binding(for: .search).displayString, description: "Search / Focus input"),
                 ShortcutInfo(key: "R", description: "Rename / set alias"),
@@ -732,6 +744,7 @@ struct PopupWindowView: View {
                 ShortcutInfo(key: "⇧T", description: "Open tag panel"),
                 ShortcutInfo(key: kb.binding(for: .commandMenu).displayString, description: "Command menu"),
                 ShortcutInfo(key: kb.binding(for: .quickPreview).displayString, description: "Preview item"),
+                ShortcutInfo(key: "p", description: "Locate in timeline"),
                 ShortcutInfo(key: "o", description: "Open in external app"),
                 ShortcutInfo(key: kb.binding(for: .delete).displayString, description: "Delete item"),
                 ShortcutInfo(key: kb.binding(for: .addToQueue).displayString, description: "Add to paste queue"),
@@ -1294,7 +1307,7 @@ struct PopupWindowView: View {
         if keyCode == 15 && isNormalMode && !isTagPanelFocused && !isSearchFocused {
             if let item = selectedItem {
                 isRenamingItem = true
-                renamingItemId = item.originalId
+                renamingItemId = item.displayId  // Use displayId for unique row identification
                 editingItemAlias = item.alias ?? item.content.preview
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     self.isRenameInputFocused = true
@@ -1743,7 +1756,14 @@ struct PopupWindowView: View {
     // MARK: - Rename/Alias Methods
     
     private func confirmRename() {
-        guard let itemId = renamingItemId else {
+        guard let displayId = renamingItemId else {
+            cancelRename()
+            return
+        }
+        
+        // Extract original UUID from displayId (may be "PIN_<uuid>" or just "<uuid>")
+        let uuidString = displayId.hasPrefix("PIN_") ? String(displayId.dropFirst(4)) : displayId
+        guard let itemId = UUID(uuidString: uuidString) else {
             cancelRename()
             return
         }
@@ -1754,6 +1774,9 @@ struct PopupWindowView: View {
         
         // Update via ClipboardMonitor
         clipboardMonitor.setAlias(itemId: itemId, alias: aliasToSet)
+        
+        // Refresh pinned items to update aliases immediately
+        loadPinnedItems()
         
         // Reset state
         cancelRename()
@@ -1767,7 +1790,7 @@ struct PopupWindowView: View {
     }
     
     private func startRename(item: ClipboardItem) {
-        renamingItemId = item.originalId
+        renamingItemId = item.displayId  // Use displayId for unique row identification
         isRenamingItem = true
         editingItemAlias = item.alias ?? ""
         isRenameInputFocused = true
@@ -2136,6 +2159,28 @@ struct PopupWindowView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .background(theme.tertiaryBackground)
+                
+                // Alias and Tags Info
+                if item.alias != nil || !tagService.getTagsForItem(itemId: item.originalId.uuidString).isEmpty {
+                    VStack(spacing: 6) {
+                        if let alias = item.alias, !alias.isEmpty {
+                            HStack {
+                                Text("Alias:")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(theme.secondaryText)
+                                Text(alias)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.green)
+                                Spacer()
+                            }
+                        }
+                        
+                        TagsInfoRow(itemId: item.originalId.uuidString, tagService: tagService, theme: theme, fontSize: 13)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(theme.secondaryBackground)
+                }
                 
                 Divider()
                 
@@ -2702,7 +2747,7 @@ struct PopupWindowView: View {
     @ViewBuilder
     private func itemRow(for item: ClipboardItem, index: Int) -> some View {
         // Show inline rename text field if this item is being renamed
-        let isThisItemBeingRenamed = isRenamingItem && renamingItemId == item.originalId
+        let isThisItemBeingRenamed = isRenamingItem && renamingItemId == item.displayId
         
         if isThisItemBeingRenamed {
             HStack(spacing: 12) {
@@ -3365,11 +3410,15 @@ struct CompactItemRow: View {
                     .cornerRadius(3)
             }
             
-            // Alias indicator (shows when item has custom alias)
+            // Alias badge (shows when item has custom alias)
             if let alias = item.alias, !alias.isEmpty {
-                Image(systemName: "tag.fill")
-                    .font(.system(size: 10))
-                    .foregroundColor(.green)
+                Text(alias)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color.green.opacity(0.8))
+                    .cornerRadius(3)
             }
             
             // Favorite indicator
