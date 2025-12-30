@@ -1200,6 +1200,29 @@ struct PopupWindowView: View {
             }
         }
         
+        // Ctrl+D/U for history list half-page scroll (only in NORMAL mode)
+        if !isSearchFocused && !isTagPanelFocused {
+            let kb = keyBindingManager
+            if kb.matches(event, command: .historyHalfPageDown) {
+                scrollHistoryByHalfPage(direction: .down)
+                return true
+            }
+            if kb.matches(event, command: .historyHalfPageUp) {
+                scrollHistoryByHalfPage(direction: .up)
+                return true
+            }
+            
+            // Cmd+D/U for preview panel half-page scroll (works in NORMAL mode)
+            if kb.matches(event, command: .previewHalfPageDown) {
+                scrollPreview(by: 200)
+                return true
+            }
+            if kb.matches(event, command: .previewHalfPageUp) {
+                scrollPreview(by: -200)
+                return true
+            }
+        }
+        
         // Enter key - paste selected (only in NORMAL mode, not SEARCH)
         if keyCode == 36 && !isSearchFocused {
             if let item = selectedItem {
@@ -1487,7 +1510,8 @@ struct PopupWindowView: View {
             
         // Preview mode commands - handled elsewhere, just return false here
         case .previewOCR, .previewCopy, .previewScrollUp, .previewScrollDown,
-             .previewHalfPageUp, .previewHalfPageDown, .previewOpenExternal:
+             .previewHalfPageUp, .previewHalfPageDown, .previewOpenExternal,
+             .historyHalfPageUp, .historyHalfPageDown:
             return false
             
         // Advanced filter - handled by keyboard shortcut directly
@@ -1906,6 +1930,25 @@ struct PopupWindowView: View {
     
     private func scrollPreview(by amount: CGFloat) {
         previewScrollOffset += amount
+    }
+    
+    /// Scroll direction for half-page scroll
+    private enum ScrollDirection {
+        case up, down
+    }
+    
+    /// Scroll history list by half page (approximately 5 items)
+    private func scrollHistoryByHalfPage(direction: ScrollDirection) {
+        let halfPage = 5  // Half page worth of items
+        let itemCount = filteredItems.count
+        guard itemCount > 0 else { return }
+        
+        switch direction {
+        case .down:
+            selectedIndex = min(selectedIndex + halfPage, itemCount - 1)
+        case .up:
+            selectedIndex = max(selectedIndex - halfPage, 0)
+        }
     }
     
     private func openInExternalApp(_ item: ClipboardItem) {

@@ -23,6 +23,8 @@ class KeyBindingManager: ObservableObject {
         case addToQueue = "Add to Paste Queue"
         case escape = "Exit / Cancel"
         case advancedFilter = "Advanced Filter"
+        case historyHalfPageUp = "History Half Page Up"
+        case historyHalfPageDown = "History Half Page Down"
         
         // Preview mode commands
         case previewOCR = "OCR Extract Text"
@@ -53,14 +55,16 @@ class KeyBindingManager: ObservableObject {
             case .addToQueue: return KeyBinding(key: "q", keyCode: 12, requiresShift: false)
             case .escape: return KeyBinding(key: "⎋", keyCode: 53, requiresShift: false)
             case .advancedFilter: return KeyBinding(key: "⌘F", keyCode: 3, requiresShift: false, requiresCommand: true)
+            case .historyHalfPageUp: return KeyBinding(key: "⌃U", keyCode: 32, requiresShift: false, requiresControl: true)
+            case .historyHalfPageDown: return KeyBinding(key: "⌃D", keyCode: 2, requiresShift: false, requiresControl: true)
             
             // Preview mode bindings
             case .previewOCR: return KeyBinding(key: "o", keyCode: 31, requiresShift: false)
             case .previewCopy: return KeyBinding(key: "⌘C", keyCode: 8, requiresShift: false, requiresCommand: true)
             case .previewScrollUp: return KeyBinding(key: "k", keyCode: 40, requiresShift: false)
             case .previewScrollDown: return KeyBinding(key: "j", keyCode: 38, requiresShift: false)
-            case .previewHalfPageUp: return KeyBinding(key: "⌃U", keyCode: 32, requiresShift: false, requiresControl: true)
-            case .previewHalfPageDown: return KeyBinding(key: "⌃D", keyCode: 2, requiresShift: false, requiresControl: true)
+            case .previewHalfPageUp: return KeyBinding(key: "⌘U", keyCode: 32, requiresShift: false, requiresCommand: true)
+            case .previewHalfPageDown: return KeyBinding(key: "⌘D", keyCode: 2, requiresShift: false, requiresCommand: true)
             case .previewOpenExternal: return KeyBinding(key: "o", keyCode: 31, requiresShift: false)
             }
         }
