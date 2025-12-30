@@ -2053,6 +2053,7 @@ struct PopupWindowView: View {
                     ScrollableTextView(
                         attributedText: attrString,
                         scrollOffset: $previewScrollOffset,
+                        targetScroll: previewScrollOffset,  // Pass value to force update
                         lineHeight: 20,
                         pageHeight: 200
                     )
@@ -2629,82 +2630,99 @@ struct PopupWindowView: View {
     private var previewArea: some View {
         Group {
             if let item = selectedItem {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        switch item.content {
-                        case .text(let string):
-                            // Async loading for large text to prevent UI blocking
-                            if string.count > 5000 {
-                                if isLoadingPreview && previewItemId == item.id {
-                                    VStack {
-                                        ProgressView()
-                                            .scaleEffect(0.8)
-                                        Text("Loading preview...")
-                                            .font(.system(size: themeManager.fontSize))
-                                            .foregroundColor(theme.secondaryText)
-                                    }
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                } else if previewItemId == item.id, let text = previewText {
-                                    Text(text)
-                                        .font(.system(size: themeManager.previewFontSize, design: .monospaced))
-                                        .foregroundColor(theme.text)
-                                        .textSelection(.enabled)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                } else {
-                                    // Trigger async load
-                                    Color.clear.onAppear {
-                                        loadPreviewAsync(for: item, text: string)
-                                    }
-                                }
-                            } else {
-                                // Small text, render directly
-                                Text(string)
-                                    .font(.system(size: themeManager.previewFontSize, design: .monospaced))
-                                    .foregroundColor(theme.text)
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                switch item.content {
+                case .text(let string):
+                    // Async loading for large text
+                    if string.count > 5000 {
+                        if isLoadingPreview && previewItemId == item.id {
+                            VStack {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Loading preview...")
+                                    .font(.system(size: themeManager.fontSize))
+                                    .foregroundColor(theme.secondaryText)
                             }
-                            
-                        case .richText(let data):
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else if previewItemId == item.id, let text = previewText {
+                            // Loaded large text
+                            let attrStr = NSAttributedString(string: text, attributes: [
+                                .font: NSFont.monospacedSystemFont(ofSize: themeManager.previewFontSize, weight: .regular),
+                                .foregroundColor: NSColor.textColor
+                            ])
+                            ScrollableTextView(
+                                attributedText: attrStr,
+                                scrollOffset: $previewScrollOffset,
+                                targetScroll: previewScrollOffset,
+                                lineHeight: 20,
+                                pageHeight: 200
+                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            // Trigger async load
+                            Color.clear.onAppear {
+                                loadPreviewAsync(for: item, text: string)
+                            }
+                        }
+                    } else {
+                        // Small text, render directly
+                        let attrStr = NSAttributedString(string: string, attributes: [
+                            .font: NSFont.monospacedSystemFont(ofSize: themeManager.previewFontSize, weight: .regular),
+                            .foregroundColor: NSColor.textColor
+                        ])
+                        ScrollableTextView(
+                            attributedText: attrStr,
+                            scrollOffset: $previewScrollOffset,
+                            targetScroll: previewScrollOffset,
+                            lineHeight: 20,
+                            pageHeight: 200
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    
+                case .richText(let data):
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
                             if let attrString = try? NSAttributedString(data: data, options: [.documentType: NSAttributedString.DocumentType.rtf], documentAttributes: nil) {
                                 Text(AttributedString(attrString))
                                     .font(.system(size: themeManager.previewFontSize))
                                     .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            
-                        case .image(let data):
+                        }
+                        .padding(16)
+                    }
+                    
+                case .image(let data):
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
                             if let nsImage = NSImage(data: data) {
                                 Image(nsImage: nsImage)
                                     .resizable()
                                     .aspectRatio(contentMode: .fit)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
-                            
-                        case .fileURL(let path):
-                            VStack(alignment: .leading, spacing: 8) {
-                                Image(systemName: "doc.fill")
-                                    .font(.system(size: 48))
-                                    .foregroundColor(theme.accent)
-                                
-                                Text(URL(fileURLWithPath: path).lastPathComponent)
-                                    .font(.system(size: themeManager.previewFontSize, weight: .medium))
-                                    .foregroundColor(theme.text)
-                                
-                                Text(path)
-                                    .font(.system(size: themeManager.fontSize - 2))
-                                    .foregroundColor(theme.secondaryText)
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
+                        .padding(16)
                     }
-                    .padding(16)
-                }
-                .onChange(of: selectedIndex) { _ in
-                    // Reset preview when selection changes
-                    previewItemId = nil
-                    previewText = nil
-                    isLoadingPreview = false
+                    
+                case .fileURL(let path):
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Image(systemName: "doc.fill")
+                                .font(.system(size: 48))
+                                .foregroundColor(theme.accent)
+                            
+                            Text(URL(fileURLWithPath: path).lastPathComponent)
+                                .font(.system(size: themeManager.previewFontSize, weight: .medium))
+                                .foregroundColor(theme.text)
+                            
+                            Text(path)
+                                .font(.system(size: themeManager.fontSize - 2))
+                                .foregroundColor(theme.secondaryText)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(16)
+                    }
                 }
             } else {
                 VStack {
@@ -2719,6 +2737,13 @@ struct PopupWindowView: View {
             }
         }
         .frame(maxHeight: .infinity)
+        .onChange(of: selectedIndex) { _ in
+            // Reset preview when selection changes
+            previewItemId = nil
+            previewText = nil
+            isLoadingPreview = false
+            previewScrollOffset = 0 // Reset scroll
+        }
     }
     
     /// Load large text preview asynchronously to prevent UI blocking
@@ -3310,6 +3335,7 @@ class FlippedClipView: NSClipView {
 struct ScrollableTextView: NSViewRepresentable {
     let attributedText: NSAttributedString
     @Binding var scrollOffset: CGFloat
+    var targetScroll: CGFloat  // Plain property to force update
     let lineHeight: CGFloat
     let pageHeight: CGFloat
     
@@ -3348,7 +3374,12 @@ struct ScrollableTextView: NSViewRepresentable {
         return scrollView
     }
     
+    static func dismantleNSView(_ nsView: NSScrollView, coordinator: ()) {
+        // Cleanup if needed
+    }
+
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        // ... (rest of implementation)
         guard let textView = scrollView.documentView as? NSTextView else { return }
         
         // Update container width to match scroll view
@@ -3376,16 +3407,30 @@ struct ScrollableTextView: NSViewRepresentable {
             )
         }
         
-        // Apply scroll offset
+        // Apply scroll offset with animation to ensure update
         let contentHeight = textView.frame.height
         let visibleHeight = scrollView.contentSize.height
         let maxScroll = max(0, contentHeight - visibleHeight)
-        let clampedOffset = min(max(0, scrollOffset), maxScroll)
+        let clampedOffset = min(max(0, targetScroll), maxScroll)  // Use targetScroll
+        
+        // Ensure binding is updated if clamped
+        if scrollOffset != clampedOffset {
+            DispatchQueue.main.async {
+                scrollOffset = clampedOffset
+            }
+        }
         
         let clipView = scrollView.contentView
         let newOrigin = NSPoint(x: 0, y: clampedOffset)
+        
+        // Always apply scroll position
         if clipView.bounds.origin.y != clampedOffset {
-            clipView.setBoundsOrigin(newOrigin)
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.1
+                context.allowsImplicitAnimation = true
+                clipView.animator().setBoundsOrigin(newOrigin)
+            }
+            scrollView.reflectScrolledClipView(clipView)
         }
     }
 }
