@@ -71,6 +71,10 @@ struct PopupWindowView: View {
     @State private var editingItemAlias: String = ""
     @FocusState private var isRenameInputFocused: Bool
     
+    // GOTO Mode State
+    @State private var isGotoMode: Bool = false
+    @State private var visibleIndices: Set<Int> = []
+    
     @Environment(\.colorScheme) private var colorScheme
     
     enum ContentTypeFilter: String, CaseIterable {
@@ -968,8 +972,94 @@ struct PopupWindowView: View {
     
     private var keyBindingManager: KeyBindingManager { KeyBindingManager.shared }
     
-    private func handleKeyDown(_ event: NSEvent) -> Bool {
+    private func handleKeyDown(with event: NSEvent) -> Bool {
         let keyCode = event.keyCode
+        
+        // GOTO Mode Handling
+        if isGotoMode {
+            if keyCode == 53 { // ESC
+                isGotoMode = false
+                return true
+            }
+            
+            // Handle shortcuts
+            if let char = event.charactersIgnoringModifiers?.first {
+                let isControlDown = event.modifierFlags.contains(.control)
+                let isCommandDown = event.modifierFlags.contains(.command)
+                
+                // j: Move down one item
+                if char == "j" && !isControlDown && !isCommandDown {
+                    if selectedIndex < filteredItems.count - 1 {
+                        selectedIndex += 1
+                    }
+                    return true
+                }
+                
+                // k: Move up one item
+                if char == "k" && !isControlDown && !isCommandDown {
+                    if selectedIndex > 0 {
+                        selectedIndex -= 1
+                    }
+                    return true
+                }
+                
+                // Ctrl+D: Move down 5 items (half page)
+                if char == "d" && isControlDown {
+                    selectedIndex = min(selectedIndex + 5, filteredItems.count - 1)
+                    return true
+                }
+                
+                // Ctrl+U: Move up 5 items (half page)
+                if char == "u" && isControlDown {
+                    selectedIndex = max(selectedIndex - 5, 0)
+                    return true
+                }
+                
+                // Cmd+D/U: Preview scroll - pass through
+                if (char == "d" || char == "u") && isCommandDown {
+                    previewScrollOffset += (char == "d" ? 200 : -200)
+                    return true
+                }
+                
+                let shortcuts = "123456789abcdefhilmnopqrstvwxyzABCDEFHIJKLMNOPQRSTUVWXYZ"
+                
+                // 'g': Scroll to Top
+                if char == "g" && !event.modifierFlags.contains(.shift) {
+                    selectedIndex = 0
+                    isGotoMode = false
+                    return true
+                }
+                
+                // 'G': Scroll to Bottom
+                if char == "G" || (char == "g" && event.modifierFlags.contains(.shift)) {
+                    selectedIndex = max(0, filteredItems.count - 1)
+                    isGotoMode = false
+                    return true
+                }
+                
+                // Shortcut Selection - only for visible items
+                if let indexStr = shortcuts.firstIndex(of: char) {
+                    let offset = shortcuts.distance(from: shortcuts.startIndex, to: indexStr)
+                    if let minVisible = visibleIndices.min(), let maxVisible = visibleIndices.max() {
+                        let targetIndex = minVisible + offset
+                        // Only paste if target is within visible range
+                        if targetIndex >= minVisible && targetIndex <= maxVisible && targetIndex < filteredItems.count {
+                            let item = filteredItems[targetIndex]
+                            clipboardMonitor.paste(item: item)
+                            isGotoMode = false
+                            return true
+                        }
+                    }
+                }
+            }
+            return true // Consume other keys in GOTO mode
+        }
+        
+        // Toggle GOTO Mode with 'g' (in Normal Mode)
+        if keyCode == 5 && isNormalMode && !event.modifierFlags.contains(.command) && !event.modifierFlags.contains(.control) {
+            isGotoMode = true
+            return true
+        }
         
         // Help panel handling - ? or ESC to close, j/k to scroll
         if isHelpPanelOpen {
@@ -2533,6 +2623,42 @@ struct PopupWindowView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 8)
                     }
+                    .overlay(
+                        Group {
+                            if isGotoMode {
+                                ZStack {
+                                    // Top-left 'g'
+                                    Text("g")
+                                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 4)
+                                                .fill(Color.teal.opacity(0.9))
+                                        )
+                                        .padding(.top, 10)
+                                        .padding(.leading, 4)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                    
+                                    // Bottom-left 'G'
+                                    Text("G")
+                                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 4)
+                                                .fill(Color.teal.opacity(0.9))
+                                        )
+                                        .padding(.bottom, 10)
+                                        .padding(.leading, 4)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                                }
+                                .allowsHitTesting(false)
+                            }
+                        }
+                    )
                     .onChange(of: selectedIndex) { newValue in
                         if let item = filteredItems[safe: newValue] {
                             withAnimation(.easeInOut(duration: 0.25)) {
@@ -2545,6 +2671,21 @@ struct PopupWindowView: View {
         }
         .background(theme.background)
     }
+    private func getShortcutChar(for index: Int) -> String? {
+        guard isGotoMode else { return nil }
+        // Only show shortcut for items currently in the visible range
+        guard visibleIndices.contains(index) else { return nil }
+        guard let minIndex = visibleIndices.min() else { return nil }
+        
+        let offset = index - minIndex
+        let shortcuts = "123456789abcdefhilmnopqrstvwxyzABCDEFHIJKLMNOPQRSTUVWXYZ"
+        if offset >= 0 && offset < shortcuts.count {
+            let idx = shortcuts.index(shortcuts.startIndex, offsetBy: offset)
+            return String(shortcuts[idx])
+        }
+        return nil
+    }
+
     @ViewBuilder
     private func itemRow(for item: ClipboardItem, index: Int) -> some View {
         // Show inline rename text field if this item is being renamed
@@ -2618,7 +2759,9 @@ struct PopupWindowView: View {
                 isPinned: item.isPinnedItem,
                 isInSearchMode: isSearchFocused,
                 fontSize: themeManager.fontSize,
-                theme: theme
+                theme: theme,
+                isGotoMode: isGotoMode,
+                shortcutChar: getShortcutChar(for: index)
             )
             .id("ROW_\(item.displayId)")  // Different id to force view update
             .contentShape(Rectangle())
@@ -2662,6 +2805,16 @@ struct PopupWindowView: View {
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
+            }
+            .onAppear {
+                visibleIndices.insert(index)
+            }
+            .onDisappear {
+                visibleIndices.remove(index)
+            }
+            .onChange(of: index) { newIndex in
+                visibleIndices.remove(index)
+                visibleIndices.insert(newIndex)
             }
         }
     }
@@ -3090,7 +3243,8 @@ struct CompactItemRow: View {
     var isInSearchMode: Bool = false  // Whether SEARCH mode is active (semi-transparent selection)
     let fontSize: Double
     let theme: ThemeColors
-    
+    var isGotoMode: Bool = false
+    var shortcutChar: String? = nil
     @State private var isHovered = false
     
     private var backgroundColor: Color {
@@ -3112,7 +3266,15 @@ struct CompactItemRow: View {
     var body: some View {
         HStack(spacing: 10) {
             // Anchor/Pin/Index indicator
-            if isAnchor {
+            if isGotoMode, let char = shortcutChar {
+                // GOTO Mode: Show shortcut badge (Priority over Pin/Anchor)
+                Text(char)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .frame(width: 18, height: 18)
+                    .background(theme.accent.opacity(0.8))
+                    .cornerRadius(4)
+            } else if isAnchor {
                 ZStack {
                     Circle()
                         .fill(Color.cyan)
@@ -3136,12 +3298,8 @@ struct CompactItemRow: View {
                     .font(.system(size: 10))
                     .foregroundColor(pinColor)
                     .frame(width: 18)
-            } else if index < 9 {
-                Text("\(index + 1)")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(theme.secondaryText)
-                    .frame(width: 18)
             } else {
+                // Normal Mode: No index displayed (per user request)
                 Spacer()
                     .frame(width: 18)
             }

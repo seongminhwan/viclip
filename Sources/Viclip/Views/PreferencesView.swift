@@ -50,7 +50,7 @@ struct PreferencesView: View {
                 }
                 .tag(6)
         }
-        .frame(width: 550, height: 450)
+        .frame(minWidth: 550, minHeight: 450)
         .preferredColorScheme(themeManager.colorScheme)
     }
 }

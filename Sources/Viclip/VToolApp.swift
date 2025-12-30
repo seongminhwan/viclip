@@ -34,6 +34,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private var statusItem: NSStatusItem!
     private var mainWindow: NSWindow?
+    private var settingsWindow: NSWindow?
     private var clipboardMonitor: ClipboardMonitor!
     private var eventMonitor: Any?
     private var isWindowVisible = false
@@ -74,6 +75,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "VTool")
             button.action = #selector(toggleWindow)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         
         // Setup global hotkeys using KeyboardShortcuts
@@ -191,11 +193,66 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc func toggleWindow() {
-        if isWindowVisible {
-            hideWindow()
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp {
+            showContextMenu()
         } else {
-            showWindow()
+            if isWindowVisible {
+                hideWindow()
+            } else {
+                showWindow()
+            }
         }
+    }
+    
+    private func showContextMenu() {
+        let menu = NSMenu()
+        
+        // Show Main Window
+        let showItem = NSMenuItem(title: "Show Main Window", action: #selector(showWindowFromMenu), keyEquivalent: "")
+        showItem.target = self
+        menu.addItem(showItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        // Settings
+        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        // Quit
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(quitItem)
+        
+        if let button = statusItem.button {
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.frame.height), in: button)
+        }
+    }
+    
+    @objc func showWindowFromMenu() {
+        showWindow()
+    }
+    
+    @objc func openSettings() {
+        // Create settings window if needed
+        if settingsWindow == nil {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 550, height: 500),
+                styleMask: [.titled, .closable, .miniaturizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Viclip Settings"
+            window.center()
+            window.contentView = NSHostingView(rootView: PreferencesView())
+            window.isReleasedWhenClosed = false
+            settingsWindow = window
+        }
+        
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
     
     private func showWindow() {
