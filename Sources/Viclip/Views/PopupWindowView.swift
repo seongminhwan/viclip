@@ -1420,9 +1420,9 @@ struct PopupWindowView: View {
             return true
             
         case .position:
-            // P key: works when searchText is not empty (filtered content)
+            // P key: works when searchText is not empty (filtered content) or for pinned items
             // Clears search and locates item in full history
-            if !isSearchFocused && !searchText.isEmpty, let item = selectedItem {
+            if !isSearchFocused, let item = selectedItem, (!searchText.isEmpty || item.isPinnedItem) {
                 let targetId = item.originalId
                 
                 // Clear search and reset to first page
