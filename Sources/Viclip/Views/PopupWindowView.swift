@@ -1663,6 +1663,13 @@ struct PopupWindowView: View {
         isRenameInputFocused = false
     }
     
+    private func startRename(item: ClipboardItem) {
+        renamingItemId = item.originalId
+        isRenamingItem = true
+        editingItemAlias = item.alias ?? ""
+        isRenameInputFocused = true
+    }
+    
     private func handleTagPanelKey(keyCode: UInt16, event: NSEvent) -> Bool {
         let tagCount = tagService.tags.count
         
@@ -2520,88 +2527,7 @@ struct PopupWindowView: View {
                                     }
                                     .padding(.vertical, 4)
                                 }
-                                // Show inline rename text field if this item is being renamed
-                                let isThisItemBeingRenamed = isRenamingItem && renamingItemId == item.originalId
-                                if isThisItemBeingRenamed {
-                                    HStack(spacing: 12) {
-                                        // Pencil icon with circle background
-                                        ZStack {
-                                            Circle()
-                                                .fill(Color.blue.opacity(0.2))
-                                                .frame(width: 24, height: 24)
-                                            Image(systemName: "pencil")
-                                                .font(.system(size: 11, weight: .medium))
-                                                .foregroundColor(.blue)
-                                        }
-                                        
-                                        // Text field with underline style
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text("Rename")
-                                                .font(.system(size: 9, weight: .medium))
-                                                .foregroundColor(.blue)
-                                            TextField("Enter alias...", text: $editingItemAlias)
-                                                .textFieldStyle(.plain)
-                                                .font(.system(size: themeManager.fontSize, weight: .medium))
-                                                .foregroundColor(theme.text)
-                                                .focused($isRenameInputFocused)
-                                                .onSubmit {
-                                                    confirmRename()
-                                                }
-                                        }
-                                        
-                                        Spacer()
-                                        
-                                        // Key hints as pill badges
-                                        HStack(spacing: 6) {
-                                            Text("⏎ Save")
-                                                .font(.system(size: 9, weight: .medium))
-                                                .foregroundColor(.white)
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 2)
-                                                .background(Color.green.opacity(0.8))
-                                                .cornerRadius(4)
-                                            Text("ESC")
-                                                .font(.system(size: 9, weight: .medium))
-                                                .foregroundColor(theme.secondaryText)
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 2)
-                                                .background(theme.tertiaryBackground)
-                                                .cornerRadius(4)
-                                        }
-                                    }
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(theme.secondaryBackground)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 8)
-                                                    .stroke(Color.blue.opacity(0.5), lineWidth: 1.5)
-                                            )
-                                    )
-                                    .id("RENAME_\(item.displayId)")  // Different id to force view update
-                                } else {
-                                    CompactItemRow(
-                                        item: item,
-                                        index: index,
-                                        isSelected: index == selectedIndex,
-                                        isFocused: !isTagPanelFocused,
-                                        isAnchor: isPositionMode && item.id == positionAnchorItem?.id,
-                                        isPinned: item.isPinnedItem,
-                                        isInSearchMode: isSearchFocused,
-                                        fontSize: themeManager.fontSize,
-                                        theme: theme
-                                    )
-                                    .id("ROW_\(item.displayId)")  // Different id to force view update
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        selectedIndex = index
-                                        isSearchFocused = false  // Back to NORMAL mode
-                                    }
-                                    .onTapGesture(count: 2) {
-                                        clipboardMonitor.paste(item: item)
-                                    }
-                                }
+                                itemRow(for: item, index: index)
                             }
                         }
                         .padding(.horizontal, 8)
@@ -2618,6 +2544,126 @@ struct PopupWindowView: View {
             }
         }
         .background(theme.background)
+    }
+    @ViewBuilder
+    private func itemRow(for item: ClipboardItem, index: Int) -> some View {
+        // Show inline rename text field if this item is being renamed
+        let isThisItemBeingRenamed = isRenamingItem && renamingItemId == item.originalId
+        
+        if isThisItemBeingRenamed {
+            HStack(spacing: 12) {
+                // Pencil icon with circle background
+                ZStack {
+                    Circle()
+                        .fill(Color.blue.opacity(0.2))
+                        .frame(width: 24, height: 24)
+                    Image(systemName: "pencil")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.blue)
+                }
+                
+                // Text field with underline style
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Rename")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.blue)
+                    TextField("Enter alias...", text: $editingItemAlias)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: themeManager.fontSize, weight: .medium))
+                        .foregroundColor(theme.text)
+                        .focused($isRenameInputFocused)
+                        .onSubmit {
+                            confirmRename()
+                        }
+                }
+                
+                Spacer()
+                
+                // Key hints as pill badges
+                HStack(spacing: 6) {
+                    Text("⏎ Save")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.8))
+                        .cornerRadius(4)
+                    Text("ESC")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(theme.secondaryText)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(theme.tertiaryBackground)
+                        .cornerRadius(4)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(theme.secondaryBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.blue.opacity(0.5), lineWidth: 1.5)
+                    )
+            )
+            .id("RENAME_\(item.displayId)")  // Different id to force view update
+        } else {
+            CompactItemRow(
+                item: item,
+                index: index,
+                isSelected: index == selectedIndex,
+                isFocused: !isTagPanelFocused,
+                isAnchor: isPositionMode && item.id == positionAnchorItem?.id,
+                isPinned: item.isPinnedItem,
+                isInSearchMode: isSearchFocused,
+                fontSize: themeManager.fontSize,
+                theme: theme
+            )
+            .id("ROW_\(item.displayId)")  // Different id to force view update
+            .contentShape(Rectangle())
+            .simultaneousGesture(TapGesture().onEnded {
+                selectedIndex = index
+                isSearchFocused = false  // Back to NORMAL mode
+            })
+            .highPriorityGesture(TapGesture(count: 2).onEnded {
+                clipboardMonitor.paste(item: item)
+            })
+            .contextMenu {
+                Button {
+                    clipboardMonitor.paste(item: item)
+                } label: {
+                    Label("Paste", systemImage: "doc.on.doc")
+                }
+                
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(item.displayText, forType: .string)
+                } label: {
+                    Label("Copy Text", systemImage: "doc.on.clipboard")
+                }
+                
+                Button {
+                    clipboardMonitor.togglePin(item: item)
+                } label: {
+                    Label(item.isPinnedItem ? "Unpin" : "Pin", systemImage: "pin")
+                }
+                
+                Button {
+                    startRename(item: item)
+                } label: {
+                    Label("Rename", systemImage: "pencil")
+                }
+                
+                Divider()
+                
+                Button(role: .destructive) {
+                    clipboardMonitor.delete(item: item)
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
     }
     
     // MARK: - Right Preview Panel
