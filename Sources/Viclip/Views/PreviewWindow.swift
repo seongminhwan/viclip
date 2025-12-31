@@ -13,6 +13,7 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
     
     private var panel: NSPanel?
     private var eventMonitor: Any?
+    private var globalEventMonitor: Any?  // For global key events when window loses focus
     private var currentItem: ClipboardItem?
     private var ocrResult: String?
     private var isPerformingOCR: Bool = false
@@ -99,6 +100,15 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
             
             return event
         }
+        
+        // Also add global monitor for ESC when window loses focus
+        globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return }
+            // ESC to close (global monitor can't prevent event propagation, just close the window)
+            if event.keyCode == 53 {
+                self.close()
+            }
+        }
     }
     
     func close() {
@@ -106,10 +116,14 @@ class PreviewWindowController: NSObject, NSWindowDelegate {
     }
     
     private func cleanup() {
-        // Remove event monitor first
+        // Remove event monitors first
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
             eventMonitor = nil
+        }
+        if let monitor = globalEventMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalEventMonitor = nil
         }
         
         // Close panel

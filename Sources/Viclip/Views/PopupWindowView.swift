@@ -75,6 +75,12 @@ struct PopupWindowView: View {
     @State private var isGotoMode: Bool = false
     @State private var visibleIndices: Set<Int> = []
     
+    // Mouse click detection state (for manual double-click detection)
+    @State private var lastClickedItemId: String? = nil
+    @State private var lastClickTime: Date = .distantPast
+    @State private var isNavigatingViaKeyboard: Bool = false  // Flag to distinguish keyboard vs mouse navigation
+    @State private var scrollToTopTrigger: UUID = UUID()  // Trigger to scroll list to top
+    
     @Environment(\.colorScheme) private var colorScheme
     
     enum ContentTypeFilter: String, CaseIterable {
@@ -369,6 +375,8 @@ struct PopupWindowView: View {
             isHelpPanelOpen = false
             isTagAssociationPopupOpen = false
             isAdvancedFilterOpen = false
+            selectedTypeFilter = .all  // Reset type filter
+            scrollToTopTrigger = UUID()  // Trigger scroll to top
             vimEngine.resetState()
             // Start in NORMAL mode (search not focused)
             isSearchFocused = false
@@ -1015,6 +1023,7 @@ struct PopupWindowView: View {
                 
                 // j: Move down one item
                 if char == "j" && !isControlDown && !isCommandDown {
+                    isNavigatingViaKeyboard = true
                     if selectedIndex < filteredItems.count - 1 {
                         selectedIndex += 1
                     }
@@ -1023,6 +1032,7 @@ struct PopupWindowView: View {
                 
                 // k: Move up one item
                 if char == "k" && !isControlDown && !isCommandDown {
+                    isNavigatingViaKeyboard = true
                     if selectedIndex > 0 {
                         selectedIndex -= 1
                     }
@@ -1031,12 +1041,14 @@ struct PopupWindowView: View {
                 
                 // Ctrl+D: Move down 5 items (half page)
                 if char == "d" && isControlDown {
+                    isNavigatingViaKeyboard = true
                     selectedIndex = min(selectedIndex + 5, filteredItems.count - 1)
                     return true
                 }
                 
                 // Ctrl+U: Move up 5 items (half page)
                 if char == "u" && isControlDown {
+                    isNavigatingViaKeyboard = true
                     selectedIndex = max(selectedIndex - 5, 0)
                     return true
                 }
@@ -1051,6 +1063,7 @@ struct PopupWindowView: View {
                 
                 // 'g': Scroll to Top
                 if char == "g" && !event.modifierFlags.contains(.shift) {
+                    isNavigatingViaKeyboard = true
                     selectedIndex = 0
                     isGotoMode = false
                     return true
@@ -1058,6 +1071,7 @@ struct PopupWindowView: View {
                 
                 // 'G': Scroll to Bottom
                 if char == "G" || (char == "g" && event.modifierFlags.contains(.shift)) {
+                    isNavigatingViaKeyboard = true
                     selectedIndex = max(0, filteredItems.count - 1)
                     isGotoMode = false
                     return true
@@ -2080,6 +2094,8 @@ struct PopupWindowView: View {
         let itemCount = filteredItems.count
         guard itemCount > 0 else { return }
         
+        isNavigatingViaKeyboard = true  // Enable scroll-to-center for keyboard navigation
+        
         switch direction {
         case .down:
             selectedIndex = min(selectedIndex + halfPage, itemCount - 1)
@@ -2506,6 +2522,7 @@ struct PopupWindowView: View {
     
     private func moveDown() {
         if filteredItems.isEmpty { return }
+        isNavigatingViaKeyboard = true  // Enable scroll-to-center for keyboard navigation
         
         if selectedIndex < filteredItems.count - 1 {
             // Load more BEFORE moving if approaching the end AND there are more items
@@ -2534,6 +2551,7 @@ struct PopupWindowView: View {
     
     private func moveUp() {
         if filteredItems.isEmpty { return }
+        isNavigatingViaKeyboard = true  // Enable scroll-to-center for keyboard navigation
         
         if selectedIndex > 0 {
             selectedIndex -= 1
@@ -2718,9 +2736,21 @@ struct PopupWindowView: View {
                         }
                     )
                     .onChange(of: selectedIndex) { newValue in
+                        // Only scroll to center when navigating via keyboard
+                        guard isNavigatingViaKeyboard else { return }
                         if let item = filteredItems[safe: newValue] {
                             withAnimation(.easeInOut(duration: 0.25)) {
                                 proxy.scrollTo(item.displayId, anchor: .center)
+                            }
+                        }
+                        // Reset flag after scrolling
+                        isNavigatingViaKeyboard = false
+                    }
+                    .onChange(of: scrollToTopTrigger) { _ in
+                        // Scroll to top when window opens
+                        if let firstItem = filteredItems.first {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                proxy.scrollTo(firstItem.displayId, anchor: .top)
                             }
                         }
                     }
@@ -2733,9 +2763,11 @@ struct PopupWindowView: View {
         guard isGotoMode else { return nil }
         // Only show shortcut for items currently in the visible range
         guard visibleIndices.contains(index) else { return nil }
-        guard let minIndex = visibleIndices.min() else { return nil }
         
-        let offset = index - minIndex
+        // Sort visible indices and find position of this index within visible items
+        let sortedVisible = visibleIndices.sorted()
+        guard let offset = sortedVisible.firstIndex(of: index) else { return nil }
+        
         let shortcuts = "123456789abcdefhilmnopqrstvwxyzABCDEFHIJKLMNOPQRSTUVWXYZ"
         if offset >= 0 && offset < shortcuts.count {
             let idx = shortcuts.index(shortcuts.startIndex, offsetBy: offset)
@@ -2823,13 +2855,26 @@ struct PopupWindowView: View {
             )
             .id("ROW_\(item.displayId)")  // Different id to force view update
             .contentShape(Rectangle())
-            .simultaneousGesture(TapGesture().onEnded {
-                selectedIndex = index
-                isSearchFocused = false  // Back to NORMAL mode
-            })
-            .highPriorityGesture(TapGesture(count: 2).onEnded {
-                clipboardMonitor.paste(item: item)
-            })
+            .onTapGesture {
+                let now = Date()
+                let timeSinceLastClick = now.timeIntervalSince(lastClickTime)
+                let isSameItem = lastClickedItemId == item.displayId
+                
+                // Double-click detection: same item within 300ms
+                if isSameItem && timeSinceLastClick < 0.3 {
+                    // Double-click: paste
+                    clipboardMonitor.paste(item: item)
+                    lastClickedItemId = nil
+                    lastClickTime = .distantPast
+                } else {
+                    // Single-click: select (no scroll)
+                    isNavigatingViaKeyboard = false
+                    selectedIndex = index
+                    isSearchFocused = false
+                    lastClickedItemId = item.displayId
+                    lastClickTime = now
+                }
+            }
             .contextMenu {
                 Button {
                     clipboardMonitor.paste(item: item)
@@ -2967,19 +3012,31 @@ struct PopupWindowView: View {
                     }
                     
                 case .fileURL(let path):
+                    let url = URL(fileURLWithPath: path)
+                    let imageExtensions = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "heic", "webp"]
+                    let isImageFile = imageExtensions.contains(url.pathExtension.lowercased())
+                    
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Image(systemName: "doc.fill")
-                                .font(.system(size: 48))
-                                .foregroundColor(theme.accent)
-                            
-                            Text(URL(fileURLWithPath: path).lastPathComponent)
-                                .font(.system(size: themeManager.previewFontSize, weight: .medium))
-                                .foregroundColor(theme.text)
-                            
-                            Text(path)
-                                .font(.system(size: themeManager.fontSize - 2))
-                                .foregroundColor(theme.secondaryText)
+                        VStack(alignment: .center, spacing: 0) {
+                            // Image preview if it's an image file
+                            if isImageFile, let nsImage = NSImage(contentsOfFile: path) {
+                                Image(nsImage: nsImage)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .cornerRadius(8)
+                            } else {
+                                // Default file icon for non-image files
+                                VStack(spacing: 12) {
+                                    Image(systemName: "doc.fill")
+                                        .font(.system(size: 48))
+                                        .foregroundColor(theme.accent)
+                                    Text(url.lastPathComponent)
+                                        .font(.system(size: themeManager.previewFontSize, weight: .medium))
+                                        .foregroundColor(theme.text)
+                                        .lineLimit(2)
+                                }
+                            }
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding(16)
@@ -3103,6 +3160,46 @@ struct PopupWindowView: View {
                     
                     // File-specific info
                     if case .fileURL(let path) = item.content {
+                        let url = URL(fileURLWithPath: path)
+                        
+                        // File name
+                        HStack {
+                            Text("File name")
+                                .font(.system(size: themeManager.fontSize - 1))
+                                .foregroundColor(theme.secondaryText)
+                            Spacer()
+                            Text(url.lastPathComponent)
+                                .font(.system(size: themeManager.fontSize - 1))
+                                .foregroundColor(theme.text)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        
+                        // File path (clickable to copy)
+                        HStack {
+                            Text("Path")
+                                .font(.system(size: themeManager.fontSize - 1))
+                                .foregroundColor(theme.secondaryText)
+                            Spacer()
+                            Button(action: {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(path, forType: .string)
+                            }) {
+                                HStack(spacing: 4) {
+                                    Text(path)
+                                        .font(.system(size: themeManager.fontSize - 1))
+                                        .foregroundColor(theme.accent)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                    Image(systemName: "doc.on.doc")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(theme.accent)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .help(path)  // Show full path on hover
+                        }
+                        
                         let fileInfo = getFileInfo(path: path)
                         if let size = fileInfo.size {
                             InfoRow(label: "File size", value: size, theme: theme, fontSize: themeManager.fontSize)
@@ -3148,7 +3245,7 @@ struct PopupWindowView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .frame(height: 180)
+        .frame(minHeight: 180)
     }
     
     private var emptyStateView: some View {

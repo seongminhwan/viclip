@@ -410,31 +410,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func closePopoverAndPaste() {
-        // Close the window first
+        // Close the window (async animation)
         hideWindow()
         
-        // Activate the previous application and paste
-        // Keep delay minimal for responsive UX
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            guard let self = self else { return }
-            
-            // Try to activate the previous app
-            var appToActivate = self.previousApp
-            
-            // If no previousApp, try to find the last non-Viclip app
-            if appToActivate == nil {
-                let myBundleId = Bundle.main.bundleIdentifier
-                appToActivate = NSWorkspace.shared.runningApplications
-                    .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != myBundleId }
-                    .first
-            }
-            
-            appToActivate?.activate(options: [.activateIgnoringOtherApps])
-            
-            // Wait for the app to activate, then simulate paste
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                self.simulatePaste()
-            }
+        // Immediately start activating the previous app (don't wait for window animation)
+        // Try to activate the previous app
+        var appToActivate = self.previousApp
+        
+        // If no previousApp, try to find the last non-Viclip app
+        if appToActivate == nil {
+            let myBundleId = Bundle.main.bundleIdentifier
+            appToActivate = NSWorkspace.shared.runningApplications
+                .filter { $0.activationPolicy == .regular && $0.bundleIdentifier != myBundleId }
+                .first
+        }
+        
+        appToActivate?.activate(options: [.activateIgnoringOtherApps])
+        
+        // Minimal delay to let the app activate, then simulate paste
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.simulatePaste()
         }
     }
     
