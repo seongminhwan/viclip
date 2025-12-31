@@ -74,6 +74,7 @@ struct PopupWindowView: View {
     // GOTO Mode State
     @State private var isGotoMode: Bool = false
     @State private var visibleIndices: Set<Int> = []
+    @State private var gotoRefreshTrigger: Int = 0  // Incremented to force row refresh in GOTO mode
     
     // Mouse click detection state (for manual double-click detection)
     @State private var lastClickedItemId: String? = nil
@@ -1024,6 +1025,7 @@ struct PopupWindowView: View {
                 // j: Move down one item
                 if char == "j" && !isControlDown && !isCommandDown {
                     isNavigatingViaKeyboard = true
+                    gotoRefreshTrigger += 1  // Force refresh shortcuts
                     if selectedIndex < filteredItems.count - 1 {
                         selectedIndex += 1
                     }
@@ -1033,6 +1035,7 @@ struct PopupWindowView: View {
                 // k: Move up one item
                 if char == "k" && !isControlDown && !isCommandDown {
                     isNavigatingViaKeyboard = true
+                    gotoRefreshTrigger += 1  // Force refresh shortcuts
                     if selectedIndex > 0 {
                         selectedIndex -= 1
                     }
@@ -1042,6 +1045,7 @@ struct PopupWindowView: View {
                 // Ctrl+D: Move down 5 items (half page)
                 if char == "d" && isControlDown {
                     isNavigatingViaKeyboard = true
+                    gotoRefreshTrigger += 1  // Force refresh shortcuts
                     selectedIndex = min(selectedIndex + 5, filteredItems.count - 1)
                     return true
                 }
@@ -1049,6 +1053,7 @@ struct PopupWindowView: View {
                 // Ctrl+U: Move up 5 items (half page)
                 if char == "u" && isControlDown {
                     isNavigatingViaKeyboard = true
+                    gotoRefreshTrigger += 1  // Force refresh shortcuts
                     selectedIndex = max(selectedIndex - 5, 0)
                     return true
                 }
@@ -2761,10 +2766,12 @@ struct PopupWindowView: View {
     }
     private func getShortcutChar(for index: Int) -> String? {
         guard isGotoMode else { return nil }
-        // Only show shortcut for items currently in the visible range
+        
+        // 只对visibleIndices中的项显示快捷键
+        // visibleIndices由onAppear/onDisappear追踪
         guard visibleIndices.contains(index) else { return nil }
         
-        // Sort visible indices and find position of this index within visible items
+        // 按索引排序可见项，编号从第一个可见项开始
         let sortedVisible = visibleIndices.sorted()
         guard let offset = sortedVisible.firstIndex(of: index) else { return nil }
         
@@ -2853,7 +2860,7 @@ struct PopupWindowView: View {
                 isGotoMode: isGotoMode,
                 shortcutChar: getShortcutChar(for: index)
             )
-            .id("ROW_\(item.displayId)")  // Different id to force view update
+            .id("ROW_\(item.displayId)_\(isGotoMode ? gotoRefreshTrigger : 0)")  // Include refresh trigger to force update
             .contentShape(Rectangle())
             .onTapGesture {
                 let now = Date()
