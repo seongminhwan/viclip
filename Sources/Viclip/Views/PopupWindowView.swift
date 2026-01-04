@@ -1326,6 +1326,54 @@ struct PopupWindowView: View {
             }
         }
         
+        // SEARCH Mode: Handle CMD+D/U scrolling and CMD+1..9 selection
+        if isSearchFocused {
+            let kb = keyBindingManager
+            
+            // CMD+D/U scrolling (override standard text field behavior if any)
+            // Explicitly check for CMD+d and CMD+u to fulfill user request
+            if (event.modifierFlags.contains(.command) && !event.modifierFlags.contains(.control) && keyCode == 2) { // CMD+D
+                 scrollHistoryByHalfPage(direction: .down)
+                 return true
+            }
+            if (event.modifierFlags.contains(.command) && !event.modifierFlags.contains(.control) && keyCode == 32) { // CMD+U
+                 scrollHistoryByHalfPage(direction: .up)
+                 return true
+            }
+            
+            // Allow Ctrl+D/U if keybinding matches (for users who prefer Ctrl, standard behavior)
+            if kb.matches(event, command: .historyHalfPageDown) {
+                 scrollHistoryByHalfPage(direction: .down)
+                 return true
+            }
+            if kb.matches(event, command: .historyHalfPageUp) {
+                 scrollHistoryByHalfPage(direction: .up)
+                 return true
+            }
+            
+            // CMD+1..9 Selection
+            // Check for Command modifier (without Control/Option to avoid conflicts)
+            if event.modifierFlags.contains(.command) && !event.modifierFlags.contains(.control) && !event.modifierFlags.contains(.option) {
+                 if let chars = event.charactersIgnoringModifiers, let char = chars.first, "123456789".contains(char) {
+                     // Reverse lookup index from visibleIndices
+                     // Logic must match getShortcutChar sorting
+                     let sortedVisible = visibleIndices.sorted()
+                     // char '1' -> index 0 (1-based index)
+                     if let digit = Int(String(char)), digit > 0 {
+                         let targetOffset = digit - 1
+                         if targetOffset < sortedVisible.count {
+                             let targetIndex = sortedVisible[targetOffset]
+                             // Paste the item
+                             if let item = filteredItems[safe: targetIndex] {
+                                 clipboardMonitor.paste(item: item)
+                                 return true
+                             }
+                         }
+                     }
+                 }
+            }
+        }
+        
         // SEARCH mode: only handle Escape, Tab, and Ctrl+P, let text field handle everything else
         if isSearchFocused && keyCode != 53 && keyCode != 48 {
             // Only intercept Ctrl+P
@@ -2900,7 +2948,7 @@ struct PopupWindowView: View {
         }
     }
     private func getShortcutChar(for index: Int) -> String? {
-        guard isGotoMode else { return nil }
+        guard isGotoMode || isSearchFocused else { return nil }
         
         // 只对visibleIndices中的项显示快捷键
         // visibleIndices由onAppear/onDisappear追踪
@@ -2909,6 +2957,10 @@ struct PopupWindowView: View {
         // 按索引排序可见项，编号从第一个可见项开始
         let sortedVisible = visibleIndices.sorted()
         guard let offset = sortedVisible.firstIndex(of: index) else { return nil }
+        
+        // Search mode: only use numbers 1-9 to avoid conflict with CMD+A/C/V etc.
+        let isLimited = isSearchFocused && !isGotoMode
+        if isLimited && offset >= 9 { return nil }
         
         let shortcuts = "123456789abcdefhilmnopqrstvwxyzABCDEFHIJKLMNOPQRSTUVWXYZ"
         if offset >= 0 && offset < shortcuts.count {
@@ -3411,7 +3463,7 @@ struct PopupWindowView: View {
             }
             
             // Center: Tag filter bar (inline, scrollable)
-            if isPinAreaVisible && !tagService.tags.isEmpty {
+            if isPinAreaVisible && !tagService.tags.isEmpty && !isSearchFocused {
                 inlineTagFilterBar
             } else {
                 Spacer()
@@ -3675,8 +3727,8 @@ struct CompactItemRow: View {
     var body: some View {
         HStack(spacing: 10) {
             // Anchor/Pin/Index indicator
-            if isGotoMode, let char = shortcutChar {
-                // GOTO Mode: Show shortcut badge (Priority over Pin/Anchor)
+            if let char = shortcutChar, !char.isEmpty {
+                // GOTO Mode or Search Mode: Show shortcut badge (Priority over Pin/Anchor)
                 Text(char)
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
                     .foregroundColor(.white)
