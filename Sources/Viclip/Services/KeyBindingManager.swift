@@ -222,8 +222,14 @@ class KeyBindingManager: ObservableObject {
         }
     }
     
-    // Number keys 1-9 for quick select
+    // Number keys 1-9 for quick select (only when no modifiers are pressed)
     func quickSelectNumber(_ event: NSEvent) -> Int? {
+        // Ignore when modifier keys are pressed (for Ctrl+number tag selection)
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard !flags.contains(.control), !flags.contains(.command), !flags.contains(.option) else {
+            return nil
+        }
+        
         guard let char = event.charactersIgnoringModifiers?.first,
               char.isNumber,
               let num = Int(String(char)),

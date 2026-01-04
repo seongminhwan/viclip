@@ -197,6 +197,11 @@ class ClipboardStore {
         largeFileStorage.externalFileCount()
     }
     
+    /// Get the offset (0-based index) of an item in the sorted list
+    func getItemRankOffset(itemId: String) -> Int? {
+        try? databaseManager.getItemRankOffset(itemId: itemId)
+    }
+    
     // MARK: - Migration
     
     private func migrateFromLegacyIfNeeded() {

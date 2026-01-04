@@ -52,6 +52,15 @@ struct PopupWindowView: View {
     // Pinned items (items under pinned tags, with PIN_ prefix)
     @State private var pinnedItems: [ClipboardItem] = []
     
+    // PIN area visibility toggle (CMD+P)
+    @State private var isPinAreaVisible: Bool = true
+    
+    // Selected pinned tag IDs for filtering PIN area (independent from TagService.selectedTagIds)
+    @State private var selectedPinnedTagIds: Set<String> = []
+    
+    // Tag bar scroll offset (for Ctrl+[/] scrolling)
+    @State private var tagBarScrollOffset: CGFloat = 0
+    
     // Async preview loading to prevent UI lag with large content
     @State private var previewText: String? = nil
     @State private var isLoadingPreview: Bool = false
@@ -122,7 +131,29 @@ struct PopupWindowView: View {
     }
     
     private var filteredPinnedItems: [ClipboardItem] {
+        // If PIN area is hidden, return empty
+        guard isPinAreaVisible else { return [] }
+        
         var filteredPinned = pinnedItems
+        
+        // Filter by selected pinned tags
+        // - Empty selection = show all
+        // - All selected = show all  
+        // - Partial selection = filter by selected tags (but always include directly pinned items)
+        let allTagIds = Set(tagService.tags.map { $0.id })
+        let isAllSelected = !selectedPinnedTagIds.isEmpty && selectedPinnedTagIds == allTagIds
+        
+        if !selectedPinnedTagIds.isEmpty && !isAllSelected {
+            filteredPinned = filteredPinned.filter { item in
+                // Always include directly pinned items
+                if item.isDirectPinned {
+                    return true
+                }
+                // Check if item belongs to any of the selected tags
+                let itemTags = tagService.getTagsForItem(itemId: item.originalId.uuidString)
+                return itemTags.contains { selectedPinnedTagIds.contains($0.id) }
+            }
+        }
         
         // Apply search filter to pinned items (includes alias)
         if !searchText.isEmpty {
@@ -1358,6 +1389,69 @@ struct PopupWindowView: View {
             }
         }
         
+        // MARK: - PIN Area Keyboard Shortcuts
+        
+        // CMD+P to toggle PIN area visibility
+        if keyCode == 35 && event.modifierFlags.contains(.command) && !event.modifierFlags.contains(.control) && isNormalMode {
+            isPinAreaVisible.toggle()
+            // Clear tag selection when hiding
+            if !isPinAreaVisible {
+                selectedPinnedTagIds.removeAll()
+                tagBarScrollOffset = 0
+            }
+            return true
+        }
+        
+        // CMD+0-9 and CMD+a-z for tag selection (only when PIN area is visible)
+        let hasCommand = event.modifierFlags.contains(.command)
+        let hasControl = event.modifierFlags.contains(.control)
+        let hasOption = event.modifierFlags.contains(.option)
+        
+        // CMD+key for tag selection (only when PIN area is visible)
+        if hasCommand && !hasControl && !hasOption && isPinAreaVisible && isNormalMode {
+            let keyCode = event.keyCode
+            
+            // CMD+0: Toggle all tags (keyCode 29)
+            if keyCode == 29 {
+                toggleAllPinnedTags()
+                return true
+            }
+            
+            // CMD+1-9: Select tags 0-8 (keyCodes: 1=18, 2=19, 3=20, 4=21, 5=23, 6=22, 7=26, 8=28, 9=25)
+            let numberKeyCodes: [UInt16: Int] = [18: 1, 19: 2, 20: 3, 21: 4, 23: 5, 22: 6, 26: 7, 28: 8, 25: 9]
+            if let digit = numberKeyCodes[keyCode] {
+                let index = digit - 1
+                if index < tagService.tags.count {
+                    let tag = tagService.tags[index]
+                    togglePinnedTagSelection(tag.id)
+                    return true
+                }
+            }
+            
+            // CMD+a-z: Select tags 9-34
+            if let char = event.charactersIgnoringModifiers?.first, char >= "a" && char <= "z" {
+                let letterIndex = Int(char.asciiValue! - Character("a").asciiValue!)
+                let index = 9 + letterIndex  // a=9, b=10, etc.
+                if index < tagService.tags.count {
+                    let tag = tagService.tags[index]
+                    togglePinnedTagSelection(tag.id)
+                    return true
+                }
+            }
+            
+            // CMD+[ : Scroll tag bar left (keyCode 33)
+            if keyCode == 33 {
+                tagBarScrollOffset = max(0, tagBarScrollOffset - 5)
+                return true
+            }
+            
+            // CMD+] : Scroll tag bar right (keyCode 30)
+            if keyCode == 30 {
+                tagBarScrollOffset = min(CGFloat(max(0, tagService.tags.count - 1)), tagBarScrollOffset + 5)
+                return true
+            }
+        }
+        
         // Enter key - paste selected (only in NORMAL mode, not SEARCH)
         if keyCode == 36 && !isSearchFocused {
             if let item = selectedItem {
@@ -1366,17 +1460,17 @@ struct PopupWindowView: View {
             return true
         }
         
-        // Number keys for quick select (only in NORMAL mode)
-        if !isSearchFocused, let num = keyBindingManager.quickSelectNumber(event) {
-            let index = num - 1
-            if index < filteredItems.count {
-                selectedIndex = index
-                if let item = selectedItem {
-                    clipboardMonitor.paste(item: item)
-                }
-                return true
-            }
-        }
+        // Number keys for quick select - DISABLED (use GOTO mode instead)
+        // if !isSearchFocused, let num = keyBindingManager.quickSelectNumber(event) {
+        //     let index = num - 1
+        //     if index < filteredItems.count {
+        //         selectedIndex = index
+        //         if let item = selectedItem {
+        //             clipboardMonitor.paste(item: item)
+        //         }
+        //         return true
+        //     }
+        // }
         
         // Get command from key binding
         if let command = keyBindingManager.command(for: event, vimEngine: vimEngine) {
@@ -1560,19 +1654,20 @@ struct PopupWindowView: View {
             if !isSearchFocused, let item = selectedItem, (!searchText.isEmpty || item.isPinnedItem) {
                 let targetId = item.originalId
                 
-                // Clear search and reset to first page
+                // Clear search first
                 searchText = ""
-                clipboardMonitor.loadFirstPage()
                 
-                // Find and select the original item after list reloads
-                // We must skip the pinned section to find the item in history
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    let pinnedCount = self.filteredPinnedItems.count
-                    let searchRange = pinnedCount..<self.filteredItems.count
-                    
-                    if let index = self.filteredItems[searchRange].firstIndex(where: { $0.originalId == targetId }) {
+                // Use loadToItem to load data up to the target item's position
+                // This handles cases where the item is beyond the currently loaded page
+                DispatchQueue.main.async {
+                    if let historyIndex = self.clipboardMonitor.loadToItem(itemId: targetId) {
+                        // Calculate the actual index including the pinned section
+                        let pinnedCount = self.filteredPinnedItems.count
+                        let actualIndex = pinnedCount + historyIndex
+                        
+                        self.isNavigatingViaKeyboard = true  // Trigger scroll to visible
                         withAnimation(.interactiveSpring(response: 0.25, dampingFraction: 0.8)) {
-                            self.selectedIndex = index
+                            self.selectedIndex = actualIndex
                         }
                     }
                 }
@@ -2682,87 +2777,127 @@ struct PopupWindowView: View {
             if filteredItems.isEmpty {
                 emptyStateView
             } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 4) {
-                            ForEach(Array(filteredItems.enumerated()), id: \.element.displayId) { index, item in
-                                // Show separator between pinned items and normal items
-                                if index == pinnedItems.count && !pinnedItems.isEmpty {
-                                    HStack {
-                                        VStack { Divider() }
-                                        Text("History")
-                                            .font(.system(size: 9, weight: .medium))
-                                            .foregroundColor(theme.secondaryText)
-                                            .textCase(.uppercase)
-                                        VStack { Divider() }
-                                    }
-                                    .padding(.vertical, 4)
-                                }
-                                itemRow(for: item, index: index)
-                            }
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 8)
-                    }
-                    .overlay(
-                        Group {
-                            if isGotoMode {
-                                ZStack {
-                                    // Top-left 'g'
-                                    Text("g")
-                                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 4)
-                                                .fill(Color.teal.opacity(0.9))
-                                        )
-                                        .padding(.top, 10)
-                                        .padding(.leading, 4)
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                                    
-                                    // Bottom-left 'G'
-                                    Text("G")
-                                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 4)
-                                                .fill(Color.teal.opacity(0.9))
-                                        )
-                                        .padding(.bottom, 10)
-                                        .padding(.leading, 4)
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                                }
-                                .allowsHitTesting(false)
-                            }
-                        }
-                    )
-                    .onChange(of: selectedIndex) { newValue in
-                        // Only scroll to center when navigating via keyboard
-                        guard isNavigatingViaKeyboard else { return }
-                        if let item = filteredItems[safe: newValue] {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                proxy.scrollTo(item.displayId, anchor: .center)
-                            }
-                        }
-                        // Reset flag after scrolling
-                        isNavigatingViaKeyboard = false
-                    }
-                    .onChange(of: scrollToTopTrigger) { _ in
-                        // Scroll to top when window opens
-                        if let firstItem = filteredItems.first {
-                            withAnimation(.easeInOut(duration: 0.15)) {
-                                proxy.scrollTo(firstItem.displayId, anchor: .top)
-                            }
-                        }
-                    }
-                }
+                historyListContainer
             }
         }
         .background(theme.background)
+    }
+
+    private var historyListContainer: some View {
+        GeometryReader { listGeo in
+            ScrollViewReader { proxy in
+                historyListScrollView(proxy: proxy, listGeo: listGeo)
+            }
+        }
+    }
+    
+    private func historyListScrollView(proxy: ScrollViewProxy, listGeo: GeometryProxy) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 4) {
+                historyListItems(listGeo: listGeo)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+        }
+        .coordinateSpace(name: "HistoryScroll")
+        .onPreferenceChange(ViewOffsetKey.self) { indices in
+            self.visibleIndices = indices
+        }
+        .overlay(gotoOverlay)
+        .onChange(of: selectedIndex) { newValue in
+            // Only scroll to center when navigating via keyboard
+            guard isNavigatingViaKeyboard else { return }
+            if let item = filteredItems[safe: newValue] {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    proxy.scrollTo(item.displayId, anchor: .center)
+                }
+            }
+            // Reset flag after scrolling
+            isNavigatingViaKeyboard = false
+        }
+        .onChange(of: scrollToTopTrigger) { _ in
+            // Scroll to top when window opens
+            if let firstItem = filteredItems.first {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    proxy.scrollTo(firstItem.displayId, anchor: .top)
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func historyListItems(listGeo: GeometryProxy) -> some View {
+         ForEach(Array(filteredItems.enumerated()), id: \.element.displayId) { index, item in
+             // Show separator between pinned items and normal items
+             // Only show when PIN area is visible and has items
+             if index == filteredPinnedItems.count && isPinAreaVisible && !filteredPinnedItems.isEmpty {
+                 HStack {
+                     VStack { Divider() }
+                     Text("History")
+                         .font(.system(size: 9, weight: .medium))
+                         .foregroundColor(theme.secondaryText)
+                         .textCase(.uppercase)
+                     VStack { Divider() }
+                 }
+                 .padding(.vertical, 4)
+             }
+             
+             itemRow(for: item, index: index)
+                 .background(
+                     GeometryReader { itemGeo in
+                         Color.clear.preference(
+                             key: ViewOffsetKey.self,
+                             value: calculateVisibility(
+                                 itemFrame: itemGeo.frame(in: .named("HistoryScroll")),
+                                 listHeight: listGeo.size.height,
+                                 index: index
+                             )
+                         )
+                     }
+                 )
+         }
+    }
+
+    private func calculateVisibility(itemFrame: CGRect, listHeight: CGFloat, index: Int) -> Set<Int> {
+        let isVisible = itemFrame.maxY >= -10 && itemFrame.minY <= listHeight + 10
+        return isVisible ? [index] : []
+    }
+    
+    private var gotoOverlay: some View {
+        Group {
+            if isGotoMode {
+                ZStack {
+                    // Top-left 'g'
+                    Text("g")
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.teal.opacity(0.9))
+                        )
+                        .padding(.top, 10)
+                        .padding(.leading, 4)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    
+                    // Bottom-left 'G'
+                    Text("G")
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.teal.opacity(0.9))
+                        )
+                        .padding(.bottom, 10)
+                        .padding(.leading, 4)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                }
+                .allowsHitTesting(false)
+            }
+        }
     }
     private func getShortcutChar(for index: Int) -> String? {
         guard isGotoMode else { return nil }
@@ -2860,7 +2995,7 @@ struct PopupWindowView: View {
                 isGotoMode: isGotoMode,
                 shortcutChar: getShortcutChar(for: index)
             )
-            .id("ROW_\(item.displayId)_\(isGotoMode ? gotoRefreshTrigger : 0)")  // Include refresh trigger to force update
+            .id("ROW_\(item.displayId)")  // Stable ID to prevent view recreation and state loss
             .contentShape(Rectangle())
             .onTapGesture {
                 let now = Date()
@@ -2915,16 +3050,6 @@ struct PopupWindowView: View {
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
-            }
-            .onAppear {
-                visibleIndices.insert(index)
-            }
-            .onDisappear {
-                visibleIndices.remove(index)
-            }
-            .onChange(of: index) { newIndex in
-                visibleIndices.remove(index)
-                visibleIndices.insert(newIndex)
             }
         }
     }
@@ -3275,7 +3400,8 @@ struct PopupWindowView: View {
     // MARK: - Footer
     
     private var footerView: some View {
-        HStack {
+        HStack(spacing: 8) {
+            // Left: Pagination info
             HStack(spacing: 6) {
                 Image(systemName: "doc.on.clipboard.fill")
                     .foregroundColor(theme.accent)
@@ -3284,9 +3410,14 @@ struct PopupWindowView: View {
                     .foregroundColor(theme.secondaryText)
             }
             
-            Spacer()
+            // Center: Tag filter bar (inline, scrollable)
+            if isPinAreaVisible && !tagService.tags.isEmpty {
+                inlineTagFilterBar
+            } else {
+                Spacer()
+            }
             
-            // VIM hints
+            // Right: VIM hints
             HStack(spacing: 8) {
                 KeyHint(key: "j/k", action: "nav", theme: theme)
                 KeyHint(key: "⏎", action: "paste", theme: theme)
@@ -3297,6 +3428,122 @@ struct PopupWindowView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+    }
+    
+    // MARK: - Inline Tag Filter Bar (compact, for footer)
+    
+    @State private var tagScrollPosition: Int = 0  // Current scroll position (tag index)
+    
+    private var inlineTagFilterBar: some View {
+        HStack(spacing: 4) {
+            // Left arrow button (only show if can scroll left)
+            if tagScrollPosition > 0 {
+                Button(action: {
+                    tagScrollPosition = max(0, tagScrollPosition - 3)
+                }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(theme.secondaryText)
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.plain)
+            }
+            
+            // Tags container
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(Array(tagService.tags.enumerated()), id: \.element.id) { index, tag in
+                            let shortcutKey = shortcutKeyForIndex(index)
+                            let isSelected = selectedPinnedTagIds.contains(tag.id)
+                            
+                            Button(action: {
+                                togglePinnedTagSelection(tag.id)
+                            }) {
+                                HStack(spacing: 2) {
+                                    Text(shortcutKey)
+                                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                        .foregroundColor(isSelected ? theme.accent : theme.secondaryText)
+                                    Text(tag.name)
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(isSelected ? theme.accent : theme.text.opacity(0.7))
+                                        .lineLimit(1)
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(isSelected ? theme.accent.opacity(0.2) : theme.secondaryBackground.opacity(0.5))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .stroke(isSelected ? theme.accent : Color.clear, lineWidth: 1)
+                                )
+                                .cornerRadius(3)
+                            }
+                            .buttonStyle(.plain)
+                            .id(index)
+                        }
+                    }
+                    .padding(.horizontal, 2)
+                }
+                .onChange(of: tagScrollPosition) { newPosition in
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        proxy.scrollTo(newPosition, anchor: .leading)
+                    }
+                }
+                .onChange(of: tagBarScrollOffset) { _ in
+                    tagScrollPosition = Int(tagBarScrollOffset)
+                }
+            }
+            
+            // Right arrow button (only show if can scroll right)
+            if tagScrollPosition < tagService.tags.count - 1 && tagService.tags.count > 5 {
+                Button(action: {
+                    tagScrollPosition = min(tagService.tags.count - 1, tagScrollPosition + 3)
+                }) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(theme.secondaryText)
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+    
+    // NOTE: tagFilterBar was removed - inlineTagFilterBar is used instead
+    
+    /// Get shortcut key string for index (CMD+1-9, CMD+a-z)
+    private func shortcutKeyForIndex(_ index: Int) -> String {
+        if index < 9 {
+            return "⌘\(index + 1)"  // ⌘1, ⌘2, etc.
+        } else if index < 35 {
+            let letterIndex = index - 9
+            let letter = Character(UnicodeScalar(Int(("a" as Character).asciiValue!) + letterIndex)!)
+            return "⌘" + String(letter)  // ⌘a, ⌘b, etc.
+        } else {
+            return ""
+        }
+    }
+    
+    /// Toggle selection of a pinned tag
+    private func togglePinnedTagSelection(_ tagId: String) {
+        if selectedPinnedTagIds.contains(tagId) {
+            selectedPinnedTagIds.remove(tagId)
+        } else {
+            selectedPinnedTagIds.insert(tagId)
+        }
+    }
+    
+    /// Toggle all tags selection (Ctrl+0)
+    private func toggleAllPinnedTags() {
+        let allTagIds = Set(tagService.tags.map { $0.id })
+        if selectedPinnedTagIds == allTagIds {
+            // All selected, deselect all
+            selectedPinnedTagIds.removeAll()
+        } else {
+            // Not all selected, select all
+            selectedPinnedTagIds = allTagIds
+        }
     }
     
     private func formatDate(_ date: Date) -> String {

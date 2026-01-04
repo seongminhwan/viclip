@@ -383,6 +383,22 @@ class DatabaseManager {
         } ?? 0
     }
     
+    /// Get the offset (0-based index) of an item in the sorted list
+    /// Items are sorted by position DESC, so this counts items with higher position
+    func getItemRankOffset(itemId: String) throws -> Int? {
+        try dbQueue?.read { db in
+            // First get the item's position
+            guard let itemPosition = try Int.fetchOne(db, sql: 
+                "SELECT position FROM clipboard_items WHERE id = ?", arguments: [itemId]) else {
+                return nil
+            }
+            // Count items with higher position (they come before in DESC order)
+            let offset = try Int.fetchOne(db, sql:
+                "SELECT COUNT(*) FROM clipboard_items WHERE position > ?", arguments: [itemPosition]) ?? 0
+            return offset
+        }
+    }
+    
     /// Unified interface for fetching items with optional search
     /// - Parameters:
     ///   - limit: Max items to return

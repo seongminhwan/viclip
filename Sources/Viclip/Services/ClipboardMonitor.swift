@@ -376,6 +376,28 @@ class ClipboardMonitor: ObservableObject {
         return true
     }
     
+    /// Load items up to and including a specific item by ID
+    /// Returns the index of the item in the loaded list, or nil if not found
+    func loadToItem(itemId: UUID) -> Int? {
+        // Get the item's offset in the database
+        guard let itemOffset = store.getItemRankOffset(itemId: itemId.uuidString) else {
+            return nil
+        }
+        
+        // Calculate how many items we need to load
+        let pageSize = 100
+        // Load enough pages to include the item, plus some buffer
+        let neededItems = itemOffset + pageSize
+        
+        // Reload from start with enough items
+        currentOffset = 0
+        items = store.loadItems(limit: neededItems, offset: 0, query: nil)
+        hasMore = items.count >= neededItems
+        
+        // Find the item's index in the loaded list
+        return items.firstIndex(where: { $0.id == itemId })
+    }
+    
     // MARK: - Persistence
     
     private func loadData() {
