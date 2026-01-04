@@ -1330,18 +1330,8 @@ struct PopupWindowView: View {
         if isSearchFocused {
             let kb = keyBindingManager
             
-            // CMD+D/U scrolling (override standard text field behavior if any)
-            // Explicitly check for CMD+d and CMD+u to fulfill user request
-            if (event.modifierFlags.contains(.command) && !event.modifierFlags.contains(.control) && keyCode == 2) { // CMD+D
-                 scrollHistoryByHalfPage(direction: .down)
-                 return true
-            }
-            if (event.modifierFlags.contains(.command) && !event.modifierFlags.contains(.control) && keyCode == 32) { // CMD+U
-                 scrollHistoryByHalfPage(direction: .up)
-                 return true
-            }
-            
-            // Allow Ctrl+D/U if keybinding matches (for users who prefer Ctrl, standard behavior)
+            // Ctrl+D/U scrolling (consistent with NORMAL mode)
+            // Uses configured keybindings (default is Ctrl+D/U)
             if kb.matches(event, command: .historyHalfPageDown) {
                  scrollHistoryByHalfPage(direction: .down)
                  return true
