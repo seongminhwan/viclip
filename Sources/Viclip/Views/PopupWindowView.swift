@@ -3461,11 +3461,19 @@ struct PopupWindowView: View {
             
             // Right: VIM hints
             HStack(spacing: 8) {
-                KeyHint(key: "j/k", action: "nav", theme: theme)
-                KeyHint(key: "⏎", action: "paste", theme: theme)
-                KeyHint(key: "p", action: "locate", theme: theme)
-                KeyHint(key: ":", action: "menu", theme: theme)
-                KeyHint(key: "f", action: "search", theme: theme)
+                if isSearchFocused {
+                    // Search Mode Hints
+                    KeyHint(key: "CMD+1-9", action: "select", theme: theme)
+                    KeyHint(key: "⌃d/u", action: "scroll", theme: theme)
+                    KeyHint(key: "ESC", action: "exit", theme: theme)
+                } else {
+                    // Normal Mode Hints
+                    KeyHint(key: "j/k", action: "nav", theme: theme)
+                    KeyHint(key: "⏎", action: "paste", theme: theme)
+                    KeyHint(key: "p", action: "locate", theme: theme)
+                    KeyHint(key: ":", action: "menu", theme: theme)
+                    KeyHint(key: "f", action: "search", theme: theme)
+                }
             }
         }
         .padding(.horizontal, 16)
