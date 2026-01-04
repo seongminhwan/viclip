@@ -2753,7 +2753,7 @@ struct PopupWindowView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(theme.secondaryText)
                 
-                TextField("Type to filter... (/ to search, : for commands)", text: $searchText)
+                TextField("Type to filter... (f to search, : for commands)", text: $searchText)
                     .textFieldStyle(.plain)
                     .font(.system(size: themeManager.fontSize))
                     .focused($isSearchFocused)
@@ -3465,7 +3465,7 @@ struct PopupWindowView: View {
                 KeyHint(key: "⏎", action: "paste", theme: theme)
                 KeyHint(key: "p", action: "locate", theme: theme)
                 KeyHint(key: ":", action: "menu", theme: theme)
-                KeyHint(key: "/", action: "search", theme: theme)
+                KeyHint(key: "f", action: "search", theme: theme)
             }
         }
         .padding(.horizontal, 16)
