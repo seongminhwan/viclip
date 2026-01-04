@@ -3461,7 +3461,34 @@ struct PopupWindowView: View {
             
             // Right: VIM hints
             HStack(spacing: 8) {
-                if isSearchFocused {
+                if isPreviewMode {
+                    KeyHint(key: "ESC", action: "exit", theme: theme)
+                    KeyHint(key: "j/k", action: "scroll", theme: theme)
+                    KeyHint(key: "CMD+C", action: "copy", theme: theme)
+                } else if isTypeFilterMode {
+                    KeyHint(key: "ESC", action: "cancel", theme: theme)
+                    KeyHint(key: "↑/↓", action: "select", theme: theme)
+                    KeyHint(key: "⏎", action: "confirm", theme: theme)
+                } else if isTagAssociationPopupOpen {
+                    KeyHint(key: "ESC", action: "cancel", theme: theme)
+                    KeyHint(key: "⏎", action: "save", theme: theme)
+                } else if isCommandMode {
+                    KeyHint(key: "ESC", action: "cancel", theme: theme)
+                    KeyHint(key: "TAB", action: "nav", theme: theme)
+                    KeyHint(key: "⏎", action: "exec", theme: theme)
+                } else if isPositionMode {
+                    KeyHint(key: "ESC", action: "exit", theme: theme)
+                } else if isTagPanelFocused {
+                    KeyHint(key: "ESC", action: "back", theme: theme)
+                    KeyHint(key: "←/→", action: "nav", theme: theme)
+                    KeyHint(key: "⏎", action: "toggle", theme: theme)
+                } else if isRenamingItem {
+                    KeyHint(key: "ESC", action: "cancel", theme: theme)
+                    KeyHint(key: "⏎", action: "save", theme: theme)
+                } else if isGotoMode {
+                    KeyHint(key: "ESC", action: "cancel", theme: theme)
+                    KeyHint(key: "a-z", action: "select", theme: theme)
+                } else if isSearchFocused {
                     // Search Mode Hints
                     KeyHint(key: "CMD+1-9", action: "select", theme: theme)
                     KeyHint(key: "⌃d/u", action: "scroll", theme: theme)
