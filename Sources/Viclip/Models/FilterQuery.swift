@@ -11,10 +11,10 @@ enum ContentTypeFilter: String, CaseIterable, Identifiable {
     
     var displayName: String {
         switch self {
-        case .text: return "Text"
-        case .richText: return "Rich Text"
-        case .image: return "Image"
-        case .fileURL: return "File"
+        case .text: return L10n.t("contentType.text", "Text")
+        case .richText: return L10n.t("contentType.richText", "Rich Text")
+        case .image: return L10n.t("contentType.image", "Image")
+        case .fileURL: return L10n.t("contentType.file", "File")
         }
     }
     
@@ -35,8 +35,8 @@ enum TagMatchMode: String, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .any: return "Match Any"
-        case .all: return "Match All"
+        case .any: return L10n.t("advanced.matchAny", "Match Any")
+        case .all: return L10n.t("advanced.matchAll", "Match All")
         }
     }
 }
@@ -55,13 +55,13 @@ enum TimeRangePreset: String, CaseIterable, Identifiable {
     
     var displayName: String {
         switch self {
-        case .all: return "All Time"
-        case .lastHour: return "Last Hour"
-        case .today: return "Today"
-        case .yesterday: return "Yesterday"
-        case .last7Days: return "Last 7 Days"
-        case .last30Days: return "Last 30 Days"
-        case .custom: return "Custom Range"
+        case .all: return L10n.t("advanced.allTime", "All Time")
+        case .lastHour: return L10n.t("advanced.lastHour", "Last Hour")
+        case .today: return L10n.t("advanced.today", "Today")
+        case .yesterday: return L10n.t("advanced.yesterday", "Yesterday")
+        case .last7Days: return L10n.t("advanced.last7Days", "Last 7 Days")
+        case .last30Days: return L10n.t("advanced.last30Days", "Last 30 Days")
+        case .custom: return L10n.t("advanced.customRange", "Custom Range")
         }
     }
     

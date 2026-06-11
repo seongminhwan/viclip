@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "Viclip",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v13)
     ],
@@ -27,7 +28,15 @@ let package = Package(
                 "Highlightr"
             ],
             path: "Sources/Viclip",
-            exclude: ["Resources"]
+            exclude: [
+                "Resources/VTool.entitlements",
+                "Resources/Viclip.entitlements"
+            ],
+            resources: [
+                .process("Resources/AppIcon.icns"),
+                .process("Resources/en.lproj"),
+                .process("Resources/zh-Hans.lproj")
+            ]
         )
     ]
 )

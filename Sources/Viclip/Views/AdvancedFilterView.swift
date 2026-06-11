@@ -4,6 +4,7 @@ import AppKit
 struct AdvancedFilterView: View {
     @ObservedObject private var clipboardMonitor = ClipboardMonitor.shared
     @ObservedObject private var tagService = TagService.shared
+    @ObservedObject private var languageManager = AppLanguageManager.shared
     
     @Binding var filter: FilterQuery
     @Binding var isPresented: Bool
@@ -92,14 +93,14 @@ struct AdvancedFilterView: View {
                 .foregroundColor(theme.accent)
                 .font(.system(size: 18))
             
-            Text("Advanced Filter")
+            Text(L10n.t("advanced.title", "Advanced Filter"))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(theme.text)
             
             Spacer()
             
             if filter.isActive {
-                Text("\(countActiveFilters()) filters")
+                Text(String(format: L10n.t("advanced.filtersCount", "%d filters"), countActiveFilters()))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white)
                     .padding(.horizontal, 8)
@@ -416,13 +417,13 @@ struct AdvancedFilterView: View {
     
     private var keywordSection: some View {
         VStack(spacing: 0) {
-            sectionHeader(.keyword, title: "Keyword", icon: "magnifyingglass",
-                         summary: filter.keyword.isEmpty ? "None" : "\"\(filter.keyword.prefix(20))\"")
+            sectionHeader(.keyword, title: L10n.t("advanced.keyword", "Keyword"), icon: "magnifyingglass",
+                         summary: filter.keyword.isEmpty ? L10n.t("advanced.none", "None") : "\"\(filter.keyword.prefix(20))\"")
             
             if expandedSection == .keyword {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        TextField("Search text...", text: $filter.keyword)
+                        TextField(L10n.t("advanced.searchText", "Search text..."), text: $filter.keyword)
                             .textFieldStyle(.roundedBorder)
                             .focused($isKeywordFocused)
                         
@@ -439,7 +440,7 @@ struct AdvancedFilterView: View {
                         HStack(spacing: 4) {
                             Toggle("", isOn: $filter.isRegex)
                                 .toggleStyle(.checkbox)
-                            Text("Regex")
+                            Text(L10n.t("advanced.regex", "Regex"))
                             Text("⌃R")
                                 .font(.system(size: 9, design: .monospaced))
                                 .foregroundColor(theme.secondaryText)
@@ -448,7 +449,7 @@ struct AdvancedFilterView: View {
                         HStack(spacing: 4) {
                             Toggle("", isOn: $filter.caseSensitive)
                                 .toggleStyle(.checkbox)
-                            Text("Case Sensitive")
+                            Text(L10n.t("advanced.caseSensitive", "Case Sensitive"))
                             Text("⌃C")
                                 .font(.system(size: 9, design: .monospaced))
                                 .foregroundColor(theme.secondaryText)
@@ -467,14 +468,14 @@ struct AdvancedFilterView: View {
     
     private var contentTypeSummary: String {
         let count = filter.contentTypes.count
-        if count == ContentTypeFilter.allCases.count { return "All" }
-        if count == 0 { return "None" }
+        if count == ContentTypeFilter.allCases.count { return L10n.t("advanced.all", "All") }
+        if count == 0 { return L10n.t("advanced.none", "None") }
         return filter.contentTypes.map { $0.displayName }.prefix(3).joined(separator: ", ")
     }
     
     private var contentTypeSection: some View {
         VStack(spacing: 0) {
-            sectionHeader(.contentType, title: "Content Type", icon: "doc.on.doc",
+            sectionHeader(.contentType, title: L10n.t("advanced.contentType", "Content Type"), icon: "doc.on.doc",
                          summary: contentTypeSummary)
             
             if expandedSection == .contentType {
@@ -505,26 +506,26 @@ struct AdvancedFilterView: View {
     // MARK: - Source App Section
     
     private var sourceAppSummary: String {
-        if filter.sourceApps.isEmpty { return "All Apps" }
+        if filter.sourceApps.isEmpty { return L10n.t("advanced.allApps", "All Apps") }
         return filter.sourceApps.prefix(2).joined(separator: ", ")
     }
     
     private var sourceAppSection: some View {
         VStack(spacing: 0) {
-            sectionHeader(.sourceApp, title: "Source App", icon: "app.badge",
+            sectionHeader(.sourceApp, title: L10n.t("advanced.sourceApp", "Source App"), icon: "app.badge",
                          summary: sourceAppSummary)
             
             if expandedSection == .sourceApp {
                 VStack(spacing: 0) {
                     if availableSourceApps.isEmpty {
-                        Text("No source apps recorded")
+                        Text(L10n.t("advanced.noSourceApps", "No source apps recorded"))
                             .font(.system(size: 12))
                             .foregroundColor(theme.secondaryText)
                             .padding(.vertical, 8)
                     } else {
                         // All Apps option (radio-style when selected, clears others)
                         SelectableRow(
-                            title: "All Apps",
+                            title: L10n.t("advanced.allApps", "All Apps"),
                             isSelected: filter.sourceApps.isEmpty,
                             isHighlighted: sourceAppIndex == 0,
                             theme: theme
@@ -560,7 +561,7 @@ struct AdvancedFilterView: View {
     
     private var timeRangeSection: some View {
         VStack(spacing: 0) {
-            sectionHeader(.timeRange, title: "Time Range", icon: "clock",
+            sectionHeader(.timeRange, title: L10n.t("advanced.timeRange", "Time Range"), icon: "clock",
                          summary: filter.timeRangePreset.displayName)
             
             if expandedSection == .timeRange {
@@ -583,7 +584,7 @@ struct AdvancedFilterView: View {
                         HStack(spacing: 16) {
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack {
-                                    Text("From")
+                                    Text(L10n.t("advanced.from", "From"))
                                     Text("⌃F")
                                         .font(.system(size: 9, design: .monospaced))
                                         .foregroundColor(theme.secondaryText)
@@ -600,7 +601,7 @@ struct AdvancedFilterView: View {
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack {
-                                    Text("To")
+                                    Text(L10n.t("advanced.to", "To"))
                                     Text("⌃T")
                                         .font(.system(size: 9, design: .monospaced))
                                         .foregroundColor(theme.secondaryText)
@@ -639,7 +640,7 @@ struct AdvancedFilterView: View {
     // MARK: - Tags Section
     
     private var tagsSummary: String {
-        if filter.tagIds.isEmpty { return "All" }
+        if filter.tagIds.isEmpty { return L10n.t("advanced.all", "All") }
         let names = filter.tagIds.compactMap { id in
             tagService.tags.first { $0.id == id }?.name
         }
@@ -648,12 +649,12 @@ struct AdvancedFilterView: View {
     
     private var tagsSection: some View {
         VStack(spacing: 0) {
-            sectionHeader(.tags, title: "Tags", icon: "tag", summary: tagsSummary)
+            sectionHeader(.tags, title: L10n.t("popup.tags", "Tags"), icon: "tag", summary: tagsSummary)
             
             if expandedSection == .tags {
                 VStack(spacing: 0) {
                     if tagService.tags.isEmpty {
-                        Text("No tags available")
+                        Text(L10n.t("advanced.noTags", "No tags available"))
                             .font(.system(size: 12))
                             .foregroundColor(theme.secondaryText)
                             .padding(.vertical, 8)
@@ -677,13 +678,13 @@ struct AdvancedFilterView: View {
                         
                         if !filter.tagIds.isEmpty {
                             HStack(spacing: 12) {
-                                Text("Match:")
+                                Text(L10n.t("advanced.match", "Match:"))
                                     .font(.system(size: 11))
                                     .foregroundColor(theme.secondaryText)
                                 
                                 Picker("", selection: $filter.tagMatchMode) {
-                                    Text("Any").tag(TagMatchMode.any)
-                                    Text("All").tag(TagMatchMode.all)
+                                    Text(L10n.t("advanced.any", "Any")).tag(TagMatchMode.any)
+                                    Text(L10n.t("advanced.all", "All")).tag(TagMatchMode.all)
                                 }
                                 .pickerStyle(.segmented)
                                 .frame(width: 100)
@@ -702,14 +703,14 @@ struct AdvancedFilterView: View {
     
     private var optionsSection: some View {
         VStack(spacing: 0) {
-            sectionHeader(.options, title: "Options", icon: "slider.horizontal.3",
-                         summary: filter.favoritesOnly ? "Favorites Only" : "None")
+            sectionHeader(.options, title: L10n.t("advanced.options", "Options"), icon: "slider.horizontal.3",
+                         summary: filter.favoritesOnly ? L10n.t("advanced.favoritesOnly", "Favorites Only") : L10n.t("advanced.none", "None"))
             
             if expandedSection == .options {
                 VStack(spacing: 0) {
                     SelectableRow(
                         icon: "star.fill",
-                        title: "Favorites Only",
+                        title: L10n.t("advanced.favoritesOnly", "Favorites Only"),
                         isSelected: filter.favoritesOnly,
                         isHighlighted: optionsIndex == 0,
                         theme: theme
@@ -730,7 +731,7 @@ struct AdvancedFilterView: View {
         HStack(spacing: 12) {
             Button(action: { filter.reset() }) {
                 HStack {
-                    Text("Reset")
+                    Text(L10n.t("settings.reset", "Reset"))
                     Text("⌘R")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(theme.secondaryText)
@@ -746,7 +747,7 @@ struct AdvancedFilterView: View {
             
             Button(action: { applyFilter() }) {
                 HStack {
-                    Text("Apply Filter")
+                    Text(L10n.t("advanced.applyFilter", "Apply Filter"))
                     Text("⌘↩")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.white.opacity(0.7))

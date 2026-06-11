@@ -144,31 +144,33 @@ struct ClipboardItemRow: View {
     @ViewBuilder
     private var contentPreview: some View {
         switch item.content {
-        case .text(let string):
-            Text(string.replacingOccurrences(of: "\n", with: " "))
+        case .text:
+            Text(item.displayText.replacingOccurrences(of: "\n", with: " "))
                 .font(.system(.body, design: .default))
                 .foregroundColor(.primary)
             
         case .richText:
-            Text("[Rich Text Content]")
+            Text(item.displayText)
                 .font(.system(.body, design: .default))
                 .foregroundColor(.primary)
             
         case .image(let data):
-            if let thumbnail = ThumbnailService.shared.thumbnail(for: data, id: item.id.uuidString) {
+            if item.isContentLoaded,
+               !data.isEmpty,
+               let thumbnail = ThumbnailService.shared.thumbnail(for: data, id: item.id.uuidString) {
                 Image(nsImage: thumbnail)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxHeight: 60)
             } else {
-                Text("[Image]")
+                Text(item.displayText)
                     .font(.system(.body, design: .default))
                     .foregroundColor(.primary)
             }
             
-        case .fileURL(let path):
+        case .fileURL:
             HStack {
-                Text(URL(fileURLWithPath: path).lastPathComponent)
+                Text(item.displayText)
                     .font(.system(.body, design: .default))
                     .foregroundColor(.primary)
             }

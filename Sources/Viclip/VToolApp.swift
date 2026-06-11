@@ -52,6 +52,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     // Tag panel state observer
     private var tagPanelObserver: NSObjectProtocol?
+
+    private var languageObserver: NSObjectProtocol?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
@@ -73,7 +75,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: "VTool")
+            button.image = NSImage(
+                systemSymbolName: "doc.on.clipboard",
+                accessibilityDescription: L10n.t("app.status.accessibility", "Viclip")
+            )
             button.action = #selector(toggleWindow)
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
@@ -99,6 +104,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] notification in
             guard let isOpen = notification.userInfo?["isOpen"] as? Bool else { return }
             self?.adjustWindowForTagPanel(isOpen: isOpen)
+        }
+
+        languageObserver = NotificationCenter.default.addObserver(
+            forName: .appLanguageChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshLocalizedChrome()
         }
         
         // Close popup when window loses focus (becomes not key)
@@ -147,6 +160,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let observer = appActivationObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
         }
+        if let observer = languageObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    private func refreshLocalizedChrome() {
+        statusItem.button?.image = NSImage(
+            systemSymbolName: "doc.on.clipboard",
+            accessibilityDescription: L10n.t("app.status.accessibility", "Viclip")
+        )
+        settingsWindow?.title = L10n.t("settings.window.title", "Viclip Settings")
     }
     
     private func setupKeyboardShortcuts() {
@@ -209,21 +233,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         
         // Show Main Window
-        let showItem = NSMenuItem(title: "Show Main Window", action: #selector(showWindowFromMenu), keyEquivalent: "")
+        let showItem = NSMenuItem(
+            title: L10n.t("menu.showMainWindow", "Show Main Window"),
+            action: #selector(showWindowFromMenu),
+            keyEquivalent: ""
+        )
         showItem.target = self
         menu.addItem(showItem)
         
         menu.addItem(NSMenuItem.separator())
         
         // Settings
-        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(
+            title: L10n.t("menu.settings", "Settings..."),
+            action: #selector(openSettings),
+            keyEquivalent: ","
+        )
         settingsItem.target = self
         menu.addItem(settingsItem)
         
         menu.addItem(NSMenuItem.separator())
         
         // Quit
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quitItem = NSMenuItem(
+            title: L10n.t("menu.quit", "Quit"),
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        )
         menu.addItem(quitItem)
         
         if let button = statusItem.button {
@@ -244,7 +280,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 backing: .buffered,
                 defer: false
             )
-            window.title = "Viclip Settings"
+            window.title = L10n.t("settings.window.title", "Viclip Settings")
             window.center()
             window.contentView = NSHostingView(rootView: PreferencesView())
             window.isReleasedWhenClosed = false

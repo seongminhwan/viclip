@@ -4,49 +4,50 @@ import LaunchAtLogin
 
 struct PreferencesView: View {
     @ObservedObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var languageManager = AppLanguageManager.shared
     @State private var selectedTab = 0
     
     var body: some View {
         TabView(selection: $selectedTab) {
             GeneralSettingsView()
                 .tabItem {
-                    Label("General", systemImage: "gear")
+                    Label(L10n.t("settings.tab.general", "General"), systemImage: "gear")
                 }
                 .tag(0)
             
             AppearanceSettingsView()
                 .tabItem {
-                    Label("Appearance", systemImage: "paintbrush")
+                    Label(L10n.t("settings.tab.appearance", "Appearance"), systemImage: "paintbrush")
                 }
                 .tag(1)
             
             HotkeySettingsView()
                 .tabItem {
-                    Label("Hotkeys", systemImage: "keyboard")
+                    Label(L10n.t("settings.tab.hotkeys", "Hotkeys"), systemImage: "keyboard")
                 }
                 .tag(2)
             
             PrivacySettingsView()
                 .tabItem {
-                    Label("Privacy", systemImage: "hand.raised")
+                    Label(L10n.t("settings.tab.privacy", "Privacy"), systemImage: "hand.raised")
                 }
                 .tag(3)
             
             StorageSettingsView()
                 .tabItem {
-                    Label("Storage", systemImage: "internaldrive")
+                    Label(L10n.t("settings.tab.storage", "Storage"), systemImage: "internaldrive")
                 }
                 .tag(4)
             
             SyncSettingsView()
                 .tabItem {
-                    Label("Sync", systemImage: "icloud")
+                    Label(L10n.t("settings.tab.sync", "Sync"), systemImage: "icloud")
                 }
                 .tag(5)
             
             AboutView()
                 .tabItem {
-                    Label("About", systemImage: "info.circle")
+                    Label(L10n.t("settings.tab.about", "About"), systemImage: "info.circle")
                 }
                 .tag(6)
         }
@@ -63,17 +64,17 @@ enum PopupPosition: String, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .menuBar: return "Menu Bar"
-        case .center: return "Screen Center"
-        case .mouseCursor: return "Mouse Cursor"
+        case .menuBar: return L10n.t("popupPosition.menuBar", "Menu Bar")
+        case .center: return L10n.t("popupPosition.center", "Screen Center")
+        case .mouseCursor: return L10n.t("popupPosition.mouseCursor", "Mouse Cursor")
         }
     }
     
     var description: String {
         switch self {
-        case .menuBar: return "Window appears below menu bar icon"
-        case .center: return "Window appears at screen center"
-        case .mouseCursor: return "Window appears at mouse cursor"
+        case .menuBar: return L10n.t("popupPosition.menuBarDesc", "Window appears below menu bar icon")
+        case .center: return L10n.t("popupPosition.centerDesc", "Window appears at screen center")
+        case .mouseCursor: return L10n.t("popupPosition.mouseCursorDesc", "Window appears at mouse cursor")
         }
     }
 }
@@ -85,14 +86,15 @@ enum MenuBarFallback: String, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .topCenter: return "Top Center"
-        case .screenCenter: return "Screen Center"
+        case .topCenter: return L10n.t("menuBarFallback.topCenter", "Top Center")
+        case .screenCenter: return L10n.t("menuBarFallback.screenCenter", "Screen Center")
         }
     }
 }
 
 // MARK: - General Settings
 struct GeneralSettingsView: View {
+    @ObservedObject private var languageManager = AppLanguageManager.shared
     @AppStorage("historyLimit") private var historyLimit = 1000
     @AppStorage("showInDock") private var showInDock = false
     @AppStorage("popupPosition") private var popupPosition = PopupPosition.menuBar.rawValue
@@ -110,12 +112,39 @@ struct GeneralSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
+                SettingsCard(title: L10n.t("settings.language", "Language"), icon: "globe") {
+                    VStack(spacing: 12) {
+                        HStack {
+                            Text(L10n.t("settings.language", "Language"))
+                                .font(.system(size: 13))
+                            Spacer()
+                            Picker("", selection: $languageManager.selectedLanguage) {
+                                ForEach(AppLanguage.allCases) { language in
+                                    Text(language.displayName).tag(language)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 260)
+                        }
+
+                        HStack {
+                            Image(systemName: "info.circle")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                            Text(L10n.t("settings.languageHint", "Applies immediately to Viclip windows."))
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                    }
+                }
+
                 // Startup Card
-                SettingsCard(title: "Startup", icon: "power") {
+                SettingsCard(title: L10n.t("settings.startup", "Startup"), icon: "power") {
                     VStack(spacing: 12) {
                         HStack {
                             LaunchAtLogin.Toggle {
-                                Text("Launch at login")
+                                Text(L10n.t("settings.launchAtLogin", "Launch at login"))
                                     .font(.system(size: 13))
                             }
                             Spacer()
@@ -124,7 +153,7 @@ struct GeneralSettingsView: View {
                         Divider()
                         
                         HStack {
-                            Text("Show in Dock")
+                            Text(L10n.t("settings.showInDock", "Show in Dock"))
                                 .font(.system(size: 13))
                             Spacer()
                             Toggle("", isOn: $showInDock)
@@ -135,10 +164,10 @@ struct GeneralSettingsView: View {
                 }
                 
                 // Popup Card
-                SettingsCard(title: "Popup Window", icon: "macwindow") {
+                SettingsCard(title: L10n.t("settings.popupWindow", "Popup Window"), icon: "macwindow") {
                     VStack(spacing: 12) {
                         HStack {
-                            Text("Position")
+                            Text(L10n.t("settings.position", "Position"))
                                 .font(.system(size: 13))
                             Spacer()
                             Picker("", selection: $popupPosition) {
@@ -167,9 +196,9 @@ struct GeneralSettingsView: View {
                             
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Fallback Position")
+                                    Text(L10n.t("settings.fallbackPosition", "Fallback Position"))
                                         .font(.system(size: 13))
-                                    Text("When menu bar icon is hidden (e.g., by Bartender)")
+                                    Text(L10n.t("settings.fallbackHint", "When menu bar icon is hidden (e.g., by Bartender)"))
                                         .font(.system(size: 10))
                                         .foregroundColor(.secondary)
                                 }
@@ -187,10 +216,10 @@ struct GeneralSettingsView: View {
                 }
                 
                 // History Card
-                SettingsCard(title: "History", icon: "clock") {
+                SettingsCard(title: L10n.t("settings.history", "History"), icon: "clock") {
                     VStack(spacing: 12) {
                         HStack {
-                            Text("In-memory items")
+                            Text(L10n.t("settings.inMemoryItems", "In-memory items"))
                                 .font(.system(size: 13))
                             Spacer()
                             Picker("", selection: $historyLimit) {
@@ -210,7 +239,7 @@ struct GeneralSettingsView: View {
                         }) {
                             HStack {
                                 Image(systemName: "trash")
-                                Text("Clear History")
+                                Text(L10n.t("settings.clearHistory", "Clear History"))
                             }
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(.white)
@@ -220,13 +249,13 @@ struct GeneralSettingsView: View {
                             .cornerRadius(6)
                         }
                         .buttonStyle(.plain)
-                        .alert("Clear All History?", isPresented: $showClearHistoryAlert) {
-                            Button("Cancel", role: .cancel) {}
-                            Button("Clear All", role: .destructive) {
+                        .alert(L10n.t("settings.clearAllHistory", "Clear All History?"), isPresented: $showClearHistoryAlert) {
+                            Button(L10n.t("settings.cancel", "Cancel"), role: .cancel) {}
+                            Button(L10n.t("settings.clearAll", "Clear All"), role: .destructive) {
                                 ClipboardMonitor.shared.clearHistory()
                             }
                         } message: {
-                            Text("This will permanently delete ALL clipboard history from the database, including favorites. This action cannot be undone.")
+                            Text(L10n.t("settings.clearHistoryWarning", "This will permanently delete ALL clipboard history from the database, including favorites. This action cannot be undone."))
                         }
                     }
                 }
@@ -243,10 +272,10 @@ struct AppearanceSettingsView: View {
     
     var body: some View {
         Form {
-            Section("Theme") {
+            Section(L10n.t("settings.theme", "Theme")) {
                 Picker("Appearance:", selection: $themeManager.themeMode) {
                     ForEach(ThemeManager.ThemeMode.allCases, id: \.self) { mode in
-                        Text(mode.rawValue).tag(mode)
+                        Text(mode.displayName).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -254,38 +283,38 @@ struct AppearanceSettingsView: View {
                     themeManager.updateColorScheme()
                 }
                 
-                Text("Choose System to automatically match your macOS appearance.")
+                Text(L10n.t("settings.themeHint", "Choose System to automatically match your macOS appearance."))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             
-            Section("Font Size") {
+            Section(L10n.t("settings.fontSize", "Font Size")) {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Text("List font size:")
+                        Text(L10n.t("settings.listFontSize", "List font size:"))
                         Spacer()
                         Text("\(Int(themeManager.fontSize)) pt")
                             .foregroundColor(.secondary)
                     }
                     Slider(value: $themeManager.fontSize, in: 10...18, step: 1) {
-                        Text("List Font Size")
+                        Text(L10n.t("settings.listFontSizeControl", "List Font Size"))
                     }
                     
                     HStack {
-                        Text("Preview font size:")
+                        Text(L10n.t("settings.previewFontSize", "Preview font size:"))
                         Spacer()
                         Text("\(Int(themeManager.previewFontSize)) pt")
                             .foregroundColor(.secondary)
                     }
                     Slider(value: $themeManager.previewFontSize, in: 11...24, step: 1) {
-                        Text("Preview Font Size")
+                        Text(L10n.t("settings.previewFontSizeControl", "Preview Font Size"))
                     }
                 }
             }
             
-            Section("Preview") {
+            Section(L10n.t("popup.preview", "Preview")) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("List item preview:")
+                    Text(L10n.t("settings.listItemPreview", "List item preview:"))
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
@@ -298,7 +327,7 @@ struct AppearanceSettingsView: View {
                             Text(previewText)
                                 .font(.system(size: themeManager.fontSize))
                                 .lineLimit(1)
-                            Text("Preview App")
+                            Text(L10n.t("settings.previewApp", "Preview App"))
                                 .font(.system(size: themeManager.fontSize - 2))
                                 .foregroundColor(.secondary)
                         }
@@ -309,7 +338,7 @@ struct AppearanceSettingsView: View {
                     
                     Divider()
                     
-                    Text("Content preview:")
+                    Text(L10n.t("settings.contentPreview", "Content preview:"))
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
@@ -338,11 +367,11 @@ struct HotkeySettingsView: View {
         ScrollView {
             VStack(spacing: 20) {
                 // Global Hotkeys Card
-                SettingsCard(title: "Global Hotkeys", icon: "globe") {
+                SettingsCard(title: L10n.t("settings.globalHotkeys", "Global Hotkeys"), icon: "globe") {
                     VStack(spacing: 12) {
                         GlobalHotkeyRow(
-                            title: "Toggle Popup",
-                            description: "Show/hide clipboard history",
+                            title: L10n.t("settings.togglePopup", "Toggle Popup"),
+                            description: L10n.t("settings.togglePopupDesc", "Show/hide clipboard history"),
                             shortcutName: .togglePopup,
                             defaultKey: "⌘⇧V"
                         )
@@ -350,13 +379,13 @@ struct HotkeySettingsView: View {
                         Divider()
                         
                         GlobalHotkeyRow(
-                            title: "Paste Next",
-                            description: "Paste next item in queue",
+                            title: L10n.t("settings.pasteNext", "Paste Next"),
+                            description: L10n.t("settings.pasteNextDesc", "Paste next item in queue"),
                             shortcutName: .pasteSequential,
                             defaultKey: "⌘⌥V"
                         )
                         
-                        Text("Click recorder → Press new shortcut. Click ⌫ to clear.")
+                        Text(L10n.t("settings.recorderHint", "Click recorder → Press new shortcut. Click ⌫ to clear."))
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -364,7 +393,7 @@ struct HotkeySettingsView: View {
                 }
                 
                 // VIM Keys Card
-                SettingsCard(title: "VIM Mode Shortcuts", icon: "keyboard") {
+                SettingsCard(title: L10n.t("settings.vimShortcuts", "VIM Mode Shortcuts"), icon: "keyboard") {
                     VStack(spacing: 0) {
                         ForEach(Array(KeyBindingManager.Command.allCases.enumerated()), id: \.element.id) { index, command in
                             KeyBindingRow(
@@ -389,7 +418,7 @@ struct HotkeySettingsView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundColor(.orange)
-                        Text("⚠️ \"\(conflict.command.rawValue)\" conflicts with \"\(conflict.conflictsWith.rawValue)\"")
+                        Text("⚠️ \"\(conflict.command.localizedTitle)\" \(L10n.t("settings.conflictsWith", "conflicts with")) \"\(conflict.conflictsWith.localizedTitle)\"")
                             .font(.system(size: 12))
                             .foregroundColor(.orange)
                     }
@@ -403,7 +432,7 @@ struct HotkeySettingsView: View {
                 Button(action: { showResetConfirmation = true }) {
                     HStack {
                         Image(systemName: "arrow.counterclockwise")
-                        Text("Reset All to Defaults")
+                        Text(L10n.t("settings.resetAllDefaults", "Reset All to Defaults"))
                     }
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white)
@@ -413,21 +442,21 @@ struct HotkeySettingsView: View {
                     .cornerRadius(8)
                 }
                 .buttonStyle(.plain)
-                .alert("Reset All Shortcuts?", isPresented: $showResetConfirmation) {
-                    Button("Cancel", role: .cancel) {}
-                    Button("Reset", role: .destructive) {
+                .alert(L10n.t("settings.resetAllShortcuts", "Reset All Shortcuts?"), isPresented: $showResetConfirmation) {
+                    Button(L10n.t("settings.cancel", "Cancel"), role: .cancel) {}
+                    Button(L10n.t("settings.reset", "Reset"), role: .destructive) {
                         keyBindingManager.resetAllToDefaults()
                     }
                 } message: {
-                    Text("This will restore all shortcuts to their default values.")
+                    Text(L10n.t("settings.resetShortcutsWarning", "This will restore all shortcuts to their default values."))
                 }
                 
                 // Reference Card
-                SettingsCard(title: "Always Available", icon: "info.circle") {
+                SettingsCard(title: L10n.t("settings.alwaysAvailable", "Always Available"), icon: "info.circle") {
                     VStack(alignment: .leading, spacing: 8) {
-                        ReferenceRow(keys: "↑ ↓", description: "Arrow keys for navigation")
-                        ReferenceRow(keys: "1-9", description: "Quick select & paste")
-                        ReferenceRow(keys: "⎋", description: "Exit current mode")
+                        ReferenceRow(keys: "↑ ↓", description: L10n.t("settings.arrowNav", "Arrow keys for navigation"))
+                        ReferenceRow(keys: "1-9", description: L10n.t("settings.quickSelectPaste", "Quick select & paste"))
+                        ReferenceRow(keys: "⎋", description: L10n.t("settings.exitCurrentMode", "Exit current mode"))
                     }
                 }
             }
@@ -448,7 +477,7 @@ struct KeyBindingRow: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            Text(command.rawValue)
+            Text(command.localizedTitle)
                 .font(.system(size: 13))
                 .frame(maxWidth: .infinity, alignment: .leading)
             
@@ -458,7 +487,7 @@ struct KeyBindingRow: View {
                         Circle()
                             .fill(Color.orange)
                             .frame(width: 6, height: 6)
-                        Text("Press key...")
+                        Text(L10n.t("settings.pressKey", "Press key..."))
                             .foregroundColor(.orange)
                     } else {
                         Text(binding.displayString)
@@ -485,7 +514,7 @@ struct KeyBindingRow: View {
             }
             .buttonStyle(.plain)
             .disabled(!isCustomized)
-            .help(isCustomized ? "Reset to default" : "Using default")
+            .help(isCustomized ? L10n.t("settings.resetDefault", "Reset to default") : L10n.t("settings.usingDefault", "Using default"))
         }
         .padding(.vertical, 6)
     }
@@ -575,7 +604,7 @@ struct GlobalHotkeyRow: View {
                     .foregroundColor(.accentColor)
             }
             .buttonStyle(.plain)
-            .help("Reset to default: \(defaultKey)")
+            .help("\(L10n.t("settings.resetDefault", "Reset to default")): \(defaultKey)")
         }
     }
 }
@@ -670,8 +699,8 @@ struct PrivacySettingsView: View {
     
     var body: some View {
         Form {
-            Section("Excluded Apps") {
-                Text("Content from these apps will not be recorded:")
+            Section(L10n.t("settings.excludedApps", "Excluded Apps")) {
+                Text(L10n.t("settings.excludedAppsHint", "Content from these apps will not be recorded:"))
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
@@ -688,8 +717,8 @@ struct PrivacySettingsView: View {
                 }
                 
                 HStack {
-                    TextField("Bundle ID (e.g., com.example.app)", text: $newAppBundleId)
-                    Button("Add") {
+                    TextField(L10n.t("settings.bundleIdPlaceholder", "Bundle ID (e.g., com.example.app)"), text: $newAppBundleId)
+                    Button(L10n.t("settings.add", "Add")) {
                         if !newAppBundleId.isEmpty {
                             privacyFilter.addRule(PrivacyRule(appBundleId: newAppBundleId))
                             newAppBundleId = ""
@@ -699,8 +728,8 @@ struct PrivacySettingsView: View {
                 }
             }
             
-            Section("Excluded Keywords") {
-                Text("Content containing these keywords will not be recorded:")
+            Section(L10n.t("settings.excludedKeywords", "Excluded Keywords")) {
+                Text(L10n.t("settings.excludedKeywordsHint", "Content containing these keywords will not be recorded:"))
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
@@ -717,8 +746,8 @@ struct PrivacySettingsView: View {
                 }
                 
                 HStack {
-                    TextField("Keyword", text: $newKeyword)
-                    Button("Add") {
+                    TextField(L10n.t("settings.keyword", "Keyword"), text: $newKeyword)
+                    Button(L10n.t("settings.add", "Add")) {
                         if !newKeyword.isEmpty {
                             privacyFilter.addRule(PrivacyRule(keyword: newKeyword))
                             newKeyword = ""
@@ -739,22 +768,22 @@ struct SyncSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Enable iCloud Sync", isOn: $iCloudSyncEnabled)
+                Toggle(L10n.t("settings.enableICloudSync", "Enable iCloud Sync"), isOn: $iCloudSyncEnabled)
                 
-                Text("Sync your clipboard history across all your Mac devices.")
+                Text(L10n.t("settings.iCloudHint", "Sync your clipboard history across all your Mac devices."))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             
             if iCloudSyncEnabled {
-                Section("Sync Status") {
+                Section(L10n.t("settings.syncStatus", "Sync Status")) {
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
-                        Text("Connected to iCloud")
+                        Text(L10n.t("settings.connectedICloud", "Connected to iCloud"))
                     }
                     
-                    Button("Sync Now") {
+                    Button(L10n.t("settings.syncNow", "Sync Now")) {
                         // Trigger manual sync
                     }
                 }
@@ -814,11 +843,11 @@ struct AboutView: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
             
-            Text("Version 0.01")
+            Text(L10n.t("settings.version", "Version 0.01"))
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             
-            Text("A powerful clipboard manager for macOS with VIM-style navigation.")
+            Text(L10n.t("settings.aboutDescription", "A powerful clipboard manager for macOS with VIM-style navigation."))
                 .font(.body)
                 .multilineTextAlignment(.center)
                 .foregroundColor(.secondary)
@@ -828,7 +857,7 @@ struct AboutView: View {
             Link("GitHub", destination: URL(string: "https://github.com/seongminhwan/viclip")!)
                 .font(.caption)
             
-            Text("Made with ❤️")
+            Text(L10n.t("settings.madeWith", "Made with ❤️"))
                 .font(.caption)
                 .foregroundColor(.secondary)
         }

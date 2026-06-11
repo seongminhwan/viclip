@@ -4,6 +4,7 @@ import SwiftUI
 struct StorageSettingsView: View {
     @ObservedObject private var storageSettings = StorageSettings.shared
     @ObservedObject private var clipboardMonitor = ClipboardMonitor.shared
+    @ObservedObject private var languageManager = AppLanguageManager.shared
     
     // Retention settings (migrated from General settings)
     @AppStorage("retentionMaxItemsEnabled") private var retentionMaxItemsEnabled = false
@@ -25,11 +26,11 @@ struct StorageSettingsView: View {
         ScrollView {
             VStack(spacing: 20) {
                 // Statistics Card
-                SettingsCard(title: "Database Statistics", icon: "chart.bar.fill") {
+                SettingsCard(title: L10n.t("storage.databaseStats", "Database Statistics"), icon: "chart.bar.fill") {
                     HStack(spacing: 24) {
                         StatItem(
                             value: "\(clipboardMonitor.itemCount)",
-                            label: "Items",
+                            label: L10n.t("storage.items", "Items"),
                             icon: "doc.on.doc"
                         )
                         
@@ -38,7 +39,7 @@ struct StorageSettingsView: View {
                         
                         StatItem(
                             value: ByteCountFormatter.string(fromByteCount: clipboardMonitor.totalSize, countStyle: .file),
-                            label: "Total Size",
+                            label: L10n.t("storage.totalSize", "Total Size"),
                             icon: "internaldrive"
                         )
                         
@@ -47,7 +48,7 @@ struct StorageSettingsView: View {
                         
                         StatItem(
                             value: "\(clipboardMonitor.externalFileCount)",
-                            label: "External",
+                            label: L10n.t("storage.external", "External"),
                             icon: "folder"
                         )
                     }
@@ -55,13 +56,13 @@ struct StorageSettingsView: View {
                 }
                 
                 // History Limit Card (Auto-Cleanup)
-                SettingsCard(title: "History Limit", icon: "clock.arrow.circlepath") {
+                SettingsCard(title: L10n.t("storage.historyLimit", "History Limit"), icon: "clock.arrow.circlepath") {
                     VStack(spacing: 16) {
                         HStack {
                             Image(systemName: "info.circle")
                                 .font(.system(size: 11))
                                 .foregroundColor(.secondary)
-                            Text("Automatically delete old items to save storage. Disabled by default.")
+                            Text(L10n.t("storage.autoDeleteHint", "Automatically delete old items to save storage. Disabled by default."))
                                 .font(.system(size: 11))
                                 .foregroundColor(.secondary)
                             Spacer()
@@ -75,14 +76,14 @@ struct StorageSettingsView: View {
                                 Toggle("", isOn: $retentionMaxItemsEnabled)
                                     .toggleStyle(.switch)
                                     .labelsHidden()
-                                Text("Limit total saved items")
+                                Text(L10n.t("storage.limitTotal", "Limit total saved items"))
                                     .font(.system(size: 13))
                                 Spacer()
                             }
                             
                             if retentionMaxItemsEnabled {
                                 HStack {
-                                    Text("Keep at most:")
+                                    Text(L10n.t("storage.keepAtMost", "Keep at most:"))
                                         .font(.system(size: 12))
                                         .foregroundColor(.secondary)
                                     Spacer()
@@ -107,22 +108,22 @@ struct StorageSettingsView: View {
                                 Toggle("", isOn: $retentionMaxAgeEnabled)
                                     .toggleStyle(.switch)
                                     .labelsHidden()
-                                Text("Delete items older than")
+                                Text(L10n.t("storage.deleteOlder", "Delete items older than"))
                                     .font(.system(size: 13))
                                 Spacer()
                             }
                             
                             if retentionMaxAgeEnabled {
                                 HStack {
-                                    Text("Max age:")
+                                    Text(L10n.t("storage.maxAge", "Max age:"))
                                         .font(.system(size: 12))
                                         .foregroundColor(.secondary)
                                     Spacer()
                                     Picker("", selection: $retentionMaxAgeDays) {
-                                        Text("7 days").tag(7)
-                                        Text("30 days").tag(30)
-                                        Text("90 days").tag(90)
-                                        Text("1 year").tag(365)
+                                        Text(L10n.t("storage.days7", "7 days")).tag(7)
+                                        Text(L10n.t("storage.days30", "30 days")).tag(30)
+                                        Text(L10n.t("storage.days90", "90 days")).tag(90)
+                                        Text(L10n.t("storage.year1", "1 year")).tag(365)
                                     }
                                     .pickerStyle(.segmented)
                                     .frame(width: 220)
@@ -134,7 +135,7 @@ struct StorageSettingsView: View {
                 }
                 
                 // Large File Storage Card
-                SettingsCard(title: "Large File Storage", icon: "doc.badge.gearshape") {
+                SettingsCard(title: L10n.t("storage.largeFileStorage", "Large File Storage"), icon: "doc.badge.gearshape") {
                     VStack(spacing: 16) {
                         // Toggle row with left-aligned switch
                         VStack(spacing: 8) {
@@ -151,7 +152,7 @@ struct StorageSettingsView: View {
                                 .toggleStyle(.switch)
                                 .labelsHidden()
                                 
-                                Text("Store large files externally")
+                                Text(L10n.t("storage.storeExternal", "Store large files externally"))
                                     .font(.system(size: 13))
                                 Spacer()
                             }
@@ -160,7 +161,7 @@ struct StorageSettingsView: View {
                                 Image(systemName: "info.circle")
                                     .font(.system(size: 11))
                                     .foregroundColor(.secondary)
-                                Text("Improves database performance for large content")
+                                Text(L10n.t("storage.externalHint", "Improves database performance for large content"))
                                     .font(.system(size: 11))
                                     .foregroundColor(.secondary)
                                 Spacer()
@@ -172,7 +173,7 @@ struct StorageSettingsView: View {
                             
                             VStack(spacing: 8) {
                                 HStack {
-                                    Text("Threshold")
+                                    Text(L10n.t("storage.threshold", "Threshold"))
                                         .font(.system(size: 12))
                                         .foregroundColor(.secondary)
                                     Spacer()
@@ -212,7 +213,7 @@ struct StorageSettingsView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.red)
-                        Text("Danger Zone")
+                        Text(L10n.t("storage.dangerZone", "Danger Zone"))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.red)
                     }
@@ -220,7 +221,7 @@ struct StorageSettingsView: View {
                     Button(action: { showClearConfirmation = true }) {
                         HStack {
                             Image(systemName: "trash")
-                            Text("Clear All History")
+                            Text(L10n.t("storage.clearAllHistory", "Clear All History"))
                         }
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.white)
@@ -230,14 +231,14 @@ struct StorageSettingsView: View {
                         .cornerRadius(8)
                     }
                     .buttonStyle(.plain)
-                    .alert("Clear All History?", isPresented: $showClearConfirmation) {
-                        Button("Cancel", role: .cancel) {}
-                        Button("Clear", role: .destructive) {
+                    .alert(L10n.t("settings.clearAllHistory", "Clear All History?"), isPresented: $showClearConfirmation) {
+                        Button(L10n.t("settings.cancel", "Cancel"), role: .cancel) {}
+                        Button(L10n.t("storage.clear", "Clear"), role: .destructive) {
                             ClipboardStore().clearAll()
                             clipboardMonitor.reloadFromDatabase()
                         }
                     } message: {
-                        Text("This will permanently delete all clipboard history. This cannot be undone.")
+                        Text(L10n.t("storage.clearWarning", "This will permanently delete all clipboard history. This cannot be undone."))
                     }
                 }
             }
@@ -328,33 +329,33 @@ struct MigrationDialogView: View {
             }
             
             // Title
-            Text(action == .enableExternal ? "Enable External Storage?" : "Disable External Storage?")
+            Text(action == .enableExternal ? L10n.t("storage.enableExternalTitle", "Enable External Storage?") : L10n.t("storage.disableExternalTitle", "Disable External Storage?"))
                 .font(.system(size: 18, weight: .semibold))
             
             // Description
             VStack(spacing: 16) {
                 if action == .enableExternal {
-                    Text("Large files exceeding the threshold will be stored separately to improve database performance.")
+                    Text(L10n.t("storage.enableExternalDesc", "Large files exceeding the threshold will be stored separately to improve database performance."))
                         .multilineTextAlignment(.center)
                         .foregroundColor(.secondary)
                         .font(.system(size: 13))
                     
-                    Toggle("Migrate existing large items", isOn: $shouldMigrate)
+                    Toggle(L10n.t("storage.migrateExisting", "Migrate existing large items"), isOn: $shouldMigrate)
                         .font(.system(size: 13))
                 } else {
-                    Text("Choose how to handle files currently stored externally:")
+                    Text(L10n.t("storage.disableExternalDesc", "Choose how to handle files currently stored externally:"))
                         .multilineTextAlignment(.center)
                         .foregroundColor(.secondary)
                         .font(.system(size: 13))
                     
-                    Toggle("Move files back to database", isOn: $shouldMigrate)
+                    Toggle(L10n.t("storage.moveBack", "Move files back to database"), isOn: $shouldMigrate)
                         .font(.system(size: 13))
                     
                     if !shouldMigrate {
                         HStack {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundColor(.orange)
-                            Text("External files will be orphaned")
+                            Text(L10n.t("storage.orphanWarning", "External files will be orphaned"))
                                 .font(.system(size: 12))
                                 .foregroundColor(.orange)
                         }
@@ -368,7 +369,7 @@ struct MigrationDialogView: View {
             // Buttons
             HStack(spacing: 12) {
                 Button(action: onCancel) {
-                    Text("Cancel")
+                    Text(L10n.t("settings.cancel", "Cancel"))
                         .font(.system(size: 13, weight: .medium))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
@@ -378,7 +379,7 @@ struct MigrationDialogView: View {
                 .buttonStyle(.plain)
                 
                 Button(action: { onConfirm(shouldMigrate) }) {
-                    Text("Confirm")
+                    Text(L10n.t("storage.confirm", "Confirm"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)

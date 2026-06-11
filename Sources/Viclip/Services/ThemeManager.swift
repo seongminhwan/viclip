@@ -10,6 +10,14 @@ class ThemeManager: ObservableObject {
         case dark = "Dark"
         
         var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .system: return L10n.t("theme.system", "System")
+            case .light: return L10n.t("theme.light", "Light")
+            case .dark: return L10n.t("theme.dark", "Dark")
+            }
+        }
     }
     
     @Published var themeMode: ThemeMode {

@@ -3,6 +3,7 @@ import SwiftUI
 // MARK: - Tag Manager Panel
 struct TagManagerPanel: View {
     @ObservedObject var tagService = TagService.shared
+    @ObservedObject private var languageManager = AppLanguageManager.shared
     @Binding var selectedTagIndex: Int
     @Binding var isCreatingTag: Bool
     @Binding var isRenamingTag: Bool
@@ -21,7 +22,7 @@ struct TagManagerPanel: View {
             HStack {
                 Image(systemName: "tag.fill")
                     .foregroundColor(theme.accent)
-                Text("Tags")
+                Text(L10n.t("tag.title", "Tags"))
                     .font(.system(size: 12, weight: .semibold))
                 
                 Spacer()
@@ -52,7 +53,7 @@ struct TagManagerPanel: View {
                                 // Inline rename input
                                 TagInputRow(
                                     text: $editingTagName,
-                                    placeholder: "Rename tag...",
+                                    placeholder: L10n.t("tag.renamePlaceholder", "Rename tag..."),
                                     theme: theme,
                                     onConfirm: {
                                         if tagService.renameTag(id: tag.id, newName: editingTagName) {
@@ -86,7 +87,7 @@ struct TagManagerPanel: View {
                         if isCreatingTag {
                             TagInputRow(
                                 text: $editingTagName,
-                                placeholder: "New tag name...",
+                                placeholder: L10n.t("tag.newPlaceholder", "New tag name..."),
                                 theme: theme,
                                 onConfirm: {
                                     if let newTag = tagService.createTag(name: editingTagName) {
@@ -131,10 +132,10 @@ struct TagManagerPanel: View {
             // Footer - show delete confirmation or hints
             if isDeletingTagConfirm, let tag = tagToDelete {
                 VStack(spacing: 4) {
-                    Text("Delete '\(tag.name)'?")
+                    Text(String(format: L10n.t("tag.deleteTitle", "Delete '%@'?"), tag.name))
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(theme.text)
-                    Text("Delete associated records too?")
+                    Text(L10n.t("tag.deleteAssociated", "Delete associated records too?"))
                         .font(.system(size: 10))
                         .foregroundColor(theme.secondaryText)
                     HStack(spacing: 12) {
@@ -142,7 +143,7 @@ struct TagManagerPanel: View {
                             Text("y")
                                 .font(.system(size: 10, design: .monospaced))
                                 .foregroundColor(.red)
-                            Text("yes")
+                            Text(L10n.t("tag.yes", "yes"))
                                 .font(.system(size: 10))
                                 .foregroundColor(.red)
                         }
@@ -150,7 +151,7 @@ struct TagManagerPanel: View {
                             Text("n/⏎")
                                 .font(.system(size: 10, design: .monospaced))
                                 .foregroundColor(theme.accent)
-                            Text("no (default)")
+                            Text(L10n.t("tag.noDefault", "no (default)"))
                                 .font(.system(size: 10))
                                 .foregroundColor(theme.accent)
                         }
@@ -161,17 +162,17 @@ struct TagManagerPanel: View {
             } else {
                 VStack(spacing: 4) {
                     HStack(spacing: 8) {
-                        KeyHintSmall(key: "␣", action: "select", theme: theme)
-                        KeyHintSmall(key: "⏎/l", action: "confirm", theme: theme)
-                        KeyHintSmall(key: "n", action: "new", theme: theme)
+                        KeyHintSmall(key: "␣", action: L10n.t("tag.select", "select"), theme: theme)
+                        KeyHintSmall(key: "⏎/l", action: L10n.t("tag.confirm", "confirm"), theme: theme)
+                        KeyHintSmall(key: "n", action: L10n.t("popup.new", "new"), theme: theme)
                     }
                     HStack(spacing: 8) {
-                        KeyHintSmall(key: "r", action: "rename", theme: theme)
-                        KeyHintSmall(key: "d", action: "delete", theme: theme)
-                        KeyHintSmall(key: "P", action: "pin", theme: theme)
+                        KeyHintSmall(key: "r", action: L10n.t("tag.rename", "rename"), theme: theme)
+                        KeyHintSmall(key: "d", action: L10n.t("tag.delete", "delete"), theme: theme)
+                        KeyHintSmall(key: "P", action: L10n.t("tag.pin", "pin"), theme: theme)
                     }
                     HStack(spacing: 8) {
-                        KeyHintSmall(key: "h/ESC", action: "back", theme: theme)
+                        KeyHintSmall(key: "h/ESC", action: L10n.t("tag.back", "back"), theme: theme)
                     }
                 }
                 .padding(8)

@@ -79,6 +79,8 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
     var isDirectPinned: Bool  // Whether this item is directly pinned
     var pinType: PinType  // Pin type for color differentiation
     var alias: String?  // User-defined alias/name for display
+    var previewText: String?  // Lightweight preview loaded without full content
+    var isContentLoaded: Bool  // False when list row only has metadata
     
     /// The ID used for SwiftUI's ForEach/List identification
     var displayId: String {
@@ -104,13 +106,16 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
         if let alias = alias, !alias.isEmpty {
             return alias
         }
+        if let previewText = previewText, !previewText.isEmpty {
+            return previewText
+        }
         return content.preview
     }
     
     enum CodingKeys: String, CodingKey {
         case id, content, sourceApp, sourceAppBundleId, createdAt, position
-        case isFavorite, groupId, isExternallyStored, contentSize, isDirectPinned, alias
-        // virtualId and pinType are runtime only
+        case isFavorite, groupId, isExternallyStored, contentSize, isDirectPinned, alias, previewText
+        // virtualId, pinType, and isContentLoaded are runtime only
     }
     
     init(
@@ -127,7 +132,9 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
         virtualId: String? = nil,
         isDirectPinned: Bool = false,
         pinType: PinType = .none,
-        alias: String? = nil
+        alias: String? = nil,
+        previewText: String? = nil,
+        isContentLoaded: Bool = true
     ) {
         self.id = id
         self.content = content
@@ -143,6 +150,8 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
         self.isDirectPinned = isDirectPinned
         self.pinType = pinType
         self.alias = alias
+        self.previewText = previewText
+        self.isContentLoaded = isContentLoaded
     }
     
     // Custom decoder to handle legacy JSON without new fields
@@ -163,10 +172,12 @@ struct ClipboardItem: Identifiable, Codable, Equatable {
         contentSize = try container.decodeIfPresent(Int.self, forKey: .contentSize) ?? content.dataSize
         isDirectPinned = try container.decodeIfPresent(Bool.self, forKey: .isDirectPinned) ?? false
         alias = try container.decodeIfPresent(String.self, forKey: .alias)
-        
+        previewText = try container.decodeIfPresent(String.self, forKey: .previewText)
+
         // Runtime-only fields
         virtualId = nil
         pinType = .none
+        isContentLoaded = true
     }
     
     var formattedTime: String {

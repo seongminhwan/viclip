@@ -36,6 +36,36 @@ class KeyBindingManager: ObservableObject {
         case previewOpenExternal = "Open External"
         
         var id: String { rawValue }
+
+        var localizedTitle: String {
+            switch self {
+            case .moveUp: return L10n.t("keybinding.moveUp", rawValue)
+            case .moveDown: return L10n.t("keybinding.moveDown", rawValue)
+            case .moveToTop: return L10n.t("keybinding.moveToTop", rawValue)
+            case .moveToBottom: return L10n.t("keybinding.moveToBottom", rawValue)
+            case .paste: return L10n.t("keybinding.paste", rawValue)
+            case .pasteAsPlainText: return L10n.t("keybinding.pastePlain", rawValue)
+            case .delete: return L10n.t("keybinding.delete", rawValue)
+            case .favorite: return L10n.t("keybinding.favorite", rawValue)
+            case .filterByType: return L10n.t("keybinding.filterType", rawValue)
+            case .quickPreview: return L10n.t("keybinding.quickPreview", rawValue)
+            case .search: return L10n.t("keybinding.search", rawValue)
+            case .commandMenu: return L10n.t("keybinding.commandMenu", rawValue)
+            case .position: return L10n.t("keybinding.position", rawValue)
+            case .addToQueue: return L10n.t("keybinding.addToQueue", rawValue)
+            case .escape: return L10n.t("keybinding.escape", rawValue)
+            case .advancedFilter: return L10n.t("keybinding.advancedFilter", rawValue)
+            case .historyHalfPageUp: return L10n.t("keybinding.historyHalfPageUp", rawValue)
+            case .historyHalfPageDown: return L10n.t("keybinding.historyHalfPageDown", rawValue)
+            case .previewOCR: return L10n.t("keybinding.previewOCR", rawValue)
+            case .previewCopy: return L10n.t("keybinding.previewCopy", rawValue)
+            case .previewScrollUp: return L10n.t("keybinding.previewScrollUp", rawValue)
+            case .previewScrollDown: return L10n.t("keybinding.previewScrollDown", rawValue)
+            case .previewHalfPageUp: return L10n.t("keybinding.previewHalfPageUp", rawValue)
+            case .previewHalfPageDown: return L10n.t("keybinding.previewHalfPageDown", rawValue)
+            case .previewOpenExternal: return L10n.t("keybinding.previewOpenExternal", rawValue)
+            }
+        }
         
         var defaultBinding: KeyBinding {
             switch self {
